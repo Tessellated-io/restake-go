@@ -1,0 +1,31 @@
+# Tessellated Standard Build:
+# - run build, test, lint
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [ main ]
+
+jobs:
+ check-weather-watch:
+    strategy:
+      matrix:
+        make_action: ["build", "lint"]
+    runs-on: ubuntu-latest  
+    name: "${{matrix.make_action}} restake-go"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+      - name: Set up private repo access
+        run: |
+          git config --global url."https://${{ secrets.PERSONAL_ACCESS_TOKEN_FOR_GO_PACKAGES }}@github.com/".insteadOf "https://github.com/"
+      - name: "${{matrix.make_action}} Code"
+        run: make ${{matrix.make_action}}
+ 
