@@ -73,7 +73,6 @@ func (s *Signer) SendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
 ) {
-
 	// TODO: Clean up this text
 	// TODO: mess with these return codes from RPC Client
 	for {
@@ -222,7 +221,7 @@ func extractMinGlobalFee(errMsg string) (int, error) {
 	re := regexp.MustCompile(pattern)
 
 	matches := re.FindStringSubmatch(errMsg)
-	if matches != nil && len(matches) > 2 {
+	if len(matches) == 0 && len(matches) > 2 {
 		converted, err := strconv.Atoi(matches[2])
 		if err != nil {
 			fmt.Printf("Found a matching eth / evmos error, but failed to atoi it: %s", err)
