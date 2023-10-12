@@ -41,7 +41,6 @@ func NewRestakeManager(
 	memo string,
 	gasFactor float64,
 	config config.ChainConfig,
-	healthClient *health.HealthCheckClient,
 ) (*RestakeManager, error) {
 	var keyPair crypto.BytesSigner = crypto.NewKeyPairFromMnemonic(mnemonic, uint32(config.CoinType))
 	if config.CoinType == 60 {
@@ -75,8 +74,6 @@ func NewRestakeManager(
 
 		addressPrefix: config.AddressPrefix,
 		signer:        signer,
-
-		healthClient: healthClient,
 	}, nil
 }
 
@@ -86,9 +83,7 @@ type restakeTarget struct {
 }
 
 // TODO: Rip out unused rpc methods
-func (r *RestakeManager) Restake(ctx context.Context) {
-	r.healthClient.Start("restaking")
-
+func (r *RestakeManager) Restake(ctx context.Context) error {
 	// Get all delegators and grants to the bot
 	// allDelegators := r.rpcClient.GetDelegators(ctx, r.validatorAddress)
 	allGrants := r.rpcClient.GetGrants(ctx, r.botAddress)
@@ -119,6 +114,8 @@ func (r *RestakeManager) Restake(ctx context.Context) {
 	} else {
 		r.healthClient.Failed("no valid grants found")
 	}
+
+	return nil
 }
 
 func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*restakeTarget) {
