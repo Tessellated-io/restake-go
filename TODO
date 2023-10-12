@@ -8,3 +8,5 @@
 - consider grant sizes or limits and query them correctly
 
 - print out what the gas fee is
+- configure restake time
+- Fix default config parsing

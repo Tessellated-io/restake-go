@@ -15,11 +15,12 @@ type RestakeChain struct {
 }
 
 type Config struct {
-	Moniker  string         `yaml:"moniker"`
-	Mnemonic string         `yaml:"mnemonic"`
-	Memo     string         `yaml:"memo"`
-	Chains   []RestakeChain `yaml:"chains"`
-	Ignores  []string       `yaml:"ignores"`
+	Moniker        string         `yaml:"moniker"`
+	Mnemonic       string         `yaml:"mnemonic"`
+	Memo           string         `yaml:"memo"`
+	Chains         []RestakeChain `yaml:"chains"`
+	Ignores        []string       `yaml:"ignores"`
+	SleepTimeHours int            `yaml:"sleepTime"`
 }
 
 func parseConfig(filename string) (*Config, error) {

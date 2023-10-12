@@ -10,9 +10,10 @@ import (
 )
 
 type RestakeConfig struct {
-	Memo     string
-	Mnemonic string
-	Chains   []*ChainConfig
+	Memo           string
+	Mnemonic       string
+	SleepTimeHours int
+	Chains         []*ChainConfig
 }
 
 type ChainConfig struct {
@@ -105,9 +106,10 @@ func GetRestakeConfig(filename string) (*RestakeConfig, error) {
 	}
 
 	return &RestakeConfig{
-		Mnemonic: fileConfig.Mnemonic,
-		Memo:     fileConfig.Memo,
-		Chains:   configs,
+		Mnemonic:       fileConfig.Mnemonic,
+		Memo:           fileConfig.Memo,
+		SleepTimeHours: fileConfig.SleepTimeHours,
+		Chains:         configs,
 	}, nil
 }
 
