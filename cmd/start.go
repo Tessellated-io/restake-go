@@ -87,9 +87,8 @@ var startCmd = &cobra.Command{
 					}
 				}(healthClients[idx])
 			}
-			var sleepTimeHours uint64 = 3
-			fmt.Printf("Finished restaking. Will start the next round in %d hours\n", sleepTimeHours)
-			time.Sleep(3 * time.Hour)
+			fmt.Printf("Finished restaking. Will start the next round in %d hours\n", config.SleepTimeHours)
+			time.Sleep(time.Duration(config.SleepTimeHours) * time.Hour)
 		}
 	},
 }

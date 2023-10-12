@@ -39,7 +39,7 @@ func (hm *HealthCheckClient) Success(message string) bool {
 }
 
 func (hm *HealthCheckClient) Failed(message string) bool {
-	fmt.Printf("❤️‍🩹 Health failed on %s!", hm.network)
+	fmt.Printf("\u200d Health failed on %s!", hm.network)
 	return hm.ping(Fail, message)
 }
 
