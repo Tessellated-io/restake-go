@@ -52,6 +52,7 @@ var startCmd = &cobra.Command{
 
 		// Make restake clients
 		restakeManagers := []*restake.RestakeManager{}
+		healthClients := []*health.HealthCheckClient{}
 		for _, chain := range config.Chains {
 			rpcClient, err := rpc.NewRpcClient(chain.NodeGrpcURI, cdc)
 			if err != nil {
@@ -63,8 +64,9 @@ var startCmd = &cobra.Command{
 				panic(fmt.Sprintf("No health check id found for network %s", chain.Network))
 			}
 			healthClient := health.NewHealthCheckClient(chain.Network, healthcheckId)
+			healthClients = append(healthClients, healthClient)
 
-			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, gasMultiplier, *chain, healthClient)
+			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, gasMultiplier, *chain)
 			if err != nil {
 				panic(err)
 			}
@@ -72,9 +74,18 @@ var startCmd = &cobra.Command{
 		}
 
 		for {
-			for _, restakeClient := range restakeManagers {
-				fmt.Printf("\n✨ Starting Restake on %s\n", restakeClient.Network())
-				restakeClient.Restake(context.Background())
+			for idx, restakeClient := range restakeManagers {
+				go func(healthClient *health.HealthCheckClient) {
+					startMessage := fmt.Sprintf("\n✨ Starting Restake on %s\n", restakeClient.Network())
+					fmt.Println(startMessage)
+					healthClient.Start(startMessage)
+					err := restakeClient.Restake(context.Background())
+					if err != nil {
+						healthClient.Failed(err.Error())
+					} else {
+						healthClient.Success("Hooray!")
+					}
+				}(healthClients[idx])
 			}
 			var sleepTimeHours uint64 = 3
 			fmt.Printf("Finished restaking. Will start the next round in %d hours\n", sleepTimeHours)
