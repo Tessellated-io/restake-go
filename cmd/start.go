@@ -75,7 +75,7 @@ var startCmd = &cobra.Command{
 
 		for {
 			for idx, restakeClient := range restakeManagers {
-				go func(healthClient *health.HealthCheckClient) {
+				go func(restakeClient *restake.RestakeManager, healthClient *health.HealthCheckClient) {
 					startMessage := fmt.Sprintf("\n✨ Starting Restake on %s\n", restakeClient.Network())
 					fmt.Println(startMessage)
 					healthClient.Start(startMessage)
@@ -85,7 +85,7 @@ var startCmd = &cobra.Command{
 					} else {
 						healthClient.Success("Hooray!")
 					}
-				}(healthClients[idx])
+				}(restakeClient, healthClients[idx])
 			}
 			fmt.Printf("Finished restaking. Will start the next round in %d hours\n", config.SleepTimeHours)
 			time.Sleep(time.Duration(config.SleepTimeHours) * time.Hour)
