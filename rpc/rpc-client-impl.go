@@ -21,6 +21,7 @@ import (
 	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/restake-go/log"
 )
 
 // Page size to use
@@ -38,6 +39,8 @@ type rpcClientImpl struct {
 
 	attempts retry.Option
 	delay    retry.Option
+
+	log *log.Logger
 }
 
 // A struct that came back from an RPC query
@@ -50,10 +53,10 @@ type paginatedRpcResponse[dataType any] struct {
 var _ RpcClient = (*rpcClientImpl)(nil)
 
 // NewRpcClient makes a new RpcClient for the Restake Go App.
-func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec) (RpcClient, error) {
+func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec, log *log.Logger) (RpcClient, error) {
 	conn, err := grpc.GetGrpcConnection(nodeGrpcUri)
 	if err != nil {
-		fmt.Printf("Unable to connect to gRPC at URL %s: %s\n", nodeGrpcUri, err)
+		log.Error().Str("grpc url", nodeGrpcUri).Err(err).Msg("Unable to connect to gRPC")
 		return nil, err
 	}
 
@@ -74,6 +77,8 @@ func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec) (RpcClient, error) 
 
 		attempts: retry.Attempts(5),
 		delay:    retry.Delay(1 * time.Second),
+
+		log: log,
 	}, nil
 }
 
@@ -135,7 +140,7 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 
 	// If successful, attempt to poll for deliver
 	if response.TxResponse.Code == 0 {
-		fmt.Printf("Sent tx in hash: %s. Waiting for inclusion...\n", response.TxResponse.TxHash)
+		r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
 		time.Sleep(30 * time.Second)
 
 		err = retry.Do(func() error {
@@ -157,15 +162,15 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 func (r *rpcClientImpl) checkConfirmed(ctx context.Context, txHash string) error {
 	status, err := r.getTxStatus(ctx, txHash)
 	if err != nil {
-		fmt.Printf("Error querying tx status: %s\n", err)
+		r.log.Error().Err(err).Msg("Error querying tx status")
 		return err
 	} else {
 		height := status.TxResponse.Height
 		if height != 0 {
-			fmt.Printf("Transaction with hash %s confirmed at height %d\n", txHash, height)
+			r.log.Info().Err(err).Str("tx hash", txHash).Int64("height", height).Msg("Transaction confirmed")
 			return nil
 		} else {
-			fmt.Printf("Transaction still not confirmed, still waiting...\n")
+			r.log.Warn().Msg("Transaction still not confirmed, still waiting...")
 			return fmt.Errorf("transaction not yet confirmed")
 		}
 	}
@@ -271,7 +276,7 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*au
 
 // private function without retries
 func (r *rpcClientImpl) getGrants(ctx context.Context, botAddress string) ([]*authztypes.GrantAuthorization, error) {
-	fmt.Printf("...Fetching grants for bot %s\n", botAddress)
+	r.log.Info().Str("bot address", botAddress).Msg("Fetching grants for bot")
 
 	getGrantsFunc := func(ctx context.Context, pageKey []byte) (*paginatedRpcResponse[*authztypes.GrantAuthorization], error) {
 		pagination := &query.PageRequest{
@@ -297,9 +302,9 @@ func (r *rpcClientImpl) getGrants(ctx context.Context, botAddress string) ([]*au
 
 	grants, err := retrievePaginatedData(ctx, r, "grants", getGrantsFunc)
 	if err != nil {
-		fmt.Printf("	...Failed to retrieve grants for %s: %s\n", botAddress, err.Error())
+		r.log.Error().Err(err).Str("bot address", botAddress).Msg("Failed to retrieve grants")
 	}
-	fmt.Printf("	...Retrieved %d grants for %s\n", len(grants), botAddress)
+	r.log.Info().Int("num grants", len(grants)).Str("bot address", botAddress).Msg("Retrieved grants")
 
 	return grants, nil
 }
@@ -345,7 +350,7 @@ func (r *rpcClientImpl) getDelegators(ctx context.Context, validatorAddress stri
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("	...Retrieved %d delegations for %s\n", len(delegators), validatorAddress)
+	r.log.Info().Str("validator address", validatorAddress).Int("num delegators", len(delegators)).Msg("Retrieved delegations")
 
 	return delegators, nil
 }
@@ -384,7 +389,7 @@ func retrievePaginatedData[DataType any](
 
 		// Append the data
 		data = append(data, rpcResponse.data...)
-		fmt.Printf("	...Fetched a page of %d %s (total: %d)\n", len(rpcResponse.data), noun, len(data))
+		r.log.Debug().Int("num in page", len(rpcResponse.data)).Int("total fetched", len(data)).Msg(fmt.Sprintf("Fetched page of %s", noun))
 
 		// Update next key or break out of loop if we have finished
 		if len(rpcResponse.nextKey) == 0 {

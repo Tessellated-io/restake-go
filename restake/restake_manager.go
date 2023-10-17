@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/restake-go/config"
+	"github.com/restake-go/log"
 	"github.com/restake-go/rpc"
 	"github.com/restake-go/signer"
 	"github.com/tessellated-io/pickaxe/arrays"
@@ -29,6 +30,8 @@ type RestakeManager struct {
 
 	addressPrefix string
 	signer        *signer.Signer
+
+	log *log.Logger
 }
 
 func NewRestakeManager(
@@ -38,6 +41,7 @@ func NewRestakeManager(
 	memo string,
 	gasFactor float64,
 	config config.ChainConfig,
+	log *log.Logger,
 ) (*RestakeManager, error) {
 	var keyPair crypto.BytesSigner = crypto.NewKeyPairFromMnemonic(mnemonic, uint32(config.CoinType))
 	if config.CoinType == 60 {
@@ -53,6 +57,7 @@ func NewRestakeManager(
 		rpcClient,
 		memo,
 		config.FeeDenom,
+		log,
 	)
 
 	address := keyPair.GetAddress(config.AddressPrefix)
@@ -71,6 +76,8 @@ func NewRestakeManager(
 
 		addressPrefix: config.AddressPrefix,
 		signer:        signer,
+
+		log: log,
 	}, nil
 }
 
@@ -81,6 +88,9 @@ type restakeTarget struct {
 
 // TODO: Rip out unused rpc methods
 func (r *RestakeManager) Restake(ctx context.Context) error {
+	startMessage := fmt.Sprintf("✨ Starting Restake on %s", r.Network())
+	r.log.Info().Msg(startMessage)
+
 	// Get all delegators and grants to the bot
 	allGrants, err := r.rpcClient.GetGrants(ctx, r.botAddress)
 	if err != nil {
@@ -88,7 +98,7 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 	}
 
 	validGrants := arrays.Filter(allGrants, isValidGrant)
-	fmt.Printf("	...Found %d valid grants\n", len(validGrants))
+	r.log.Info().Int("valid grants", len(validGrants)).Msg("..Found valid grants")
 
 	// Map to balances and then filter by rewards
 	validDelegators := arrays.Map(validGrants, func(input *authztypes.GrantAuthorization) string { return input.Granter })
@@ -99,7 +109,7 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("	...Delegator %s has %s %s in delegation rewards\n", validDelegator, totalRewards, r.stakingToken)
+		r.log.Info().Str("delegator", validDelegator).Str("total rewards", totalRewards.String()).Str("staking token", r.stakingToken).Msg("Fetched delegation rewards")
 
 		restakeTarget := &restakeTarget{
 			delegator: validDelegator,
@@ -110,7 +120,7 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 	targetsAboveMinimum := arrays.Filter(restakeTargets, func(input *restakeTarget) bool {
 		return input.amount.GTE(r.minRewards)
 	})
-	fmt.Printf("...Found %d grants above the reward threshold\n", len(targetsAboveMinimum))
+	r.log.Info().Int("valid grants", len(targetsAboveMinimum)).Msg("fetched grants above minimum")
 
 	// Restake all delegators
 	if len(targetsAboveMinimum) > 0 {

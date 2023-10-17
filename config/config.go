@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/restake-go/log"
 	"github.com/restake-go/registry"
 	"github.com/tessellated-io/pickaxe/arrays"
 )
@@ -31,7 +32,7 @@ type ChainConfig struct {
 	CoinType int
 }
 
-func GetRestakeConfig(filename string) (*RestakeConfig, error) {
+func GetRestakeConfig(filename string, log *log.Logger) (*RestakeConfig, error) {
 	// Get data from the file
 	fileConfig, err := parseConfig(filename)
 	if err != nil {
@@ -46,19 +47,18 @@ func GetRestakeConfig(filename string) (*RestakeConfig, error) {
 	}
 
 	// Filter ignores
-	fmt.Println("Loading configs...")
+	log.Info().Msg("Loading configs...")
 	filtered := arrays.Filter(restakeChains, func(input registry.Chain) bool {
-		fmt.Printf("	Found config for  %s\n", input.Name)
+		log.Info().Str("network", input.Name).Msg("Found config")
 
 		for _, ignore := range fileConfig.Ignores {
 			if strings.EqualFold(input.Name, ignore) {
-				fmt.Printf("		/ Ignoring %s since it is marked to ignore\n", ignore)
+				log.Info().Str("network", ignore).Msg("		/ Ignoring network marked to ignore")
 				return false
 			}
 		}
 		return true
 	})
-	fmt.Println()
 
 	// Loop through each restake chain, resolving the data
 	configs := []*ChainConfig{}

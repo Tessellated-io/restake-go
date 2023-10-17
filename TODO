@@ -12,3 +12,5 @@
 - Fix default config parsing
 - Rip out sleep
 - healthchecks only on success pings or obvious failures? 
+
+- fix package in go.mod

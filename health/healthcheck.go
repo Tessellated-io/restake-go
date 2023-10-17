@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/restake-go/log"
 )
 
 type PingType string
@@ -19,27 +21,32 @@ const (
 type HealthCheckClient struct {
 	network string
 	uuid    string
+
+	log *log.Logger
 }
 
-func NewHealthCheckClient(network, uuid string) *HealthCheckClient {
+func NewHealthCheckClient(network, uuid string, log *log.Logger) *HealthCheckClient {
 	return &HealthCheckClient{
 		network: network,
 		uuid:    uuid,
+
+		log: log,
 	}
 }
 
 func (hm *HealthCheckClient) Start(message string) bool {
-	fmt.Println("🩺 Starting health on", hm.network)
+	hm.log.Info().Str("network", hm.network).Msg("🩺 Starting health")
 	return hm.ping(Start, message)
 }
 
 func (hm *HealthCheckClient) Success(message string) bool {
-	fmt.Println("❤️  Health success on", hm.network)
+	hm.log.Info().Str("network", hm.network).Msg("❤️  Health success")
 	return hm.ping(Success, message)
 }
 
 func (hm *HealthCheckClient) Failed(message string) bool {
-	fmt.Printf("\u200d Health failed on %s!", hm.network)
+	hm.log.Info().Str("network", hm.network).Msg("\u200d Health failed")
+
 	return hm.ping(Fail, message)
 }
 
@@ -67,7 +74,7 @@ func (hm *HealthCheckClient) ping(ptype PingType, message string) bool {
 	if resp.StatusCode == 200 {
 		return true
 	} else {
-		fmt.Print("Failed to ping for type", ptype, "on network", hm.network, ". Failed with", resp.StatusCode)
+		hm.log.Error().Str("network", hm.network).Str("ping type", string(ptype)).Int("response code", resp.StatusCode).Msg("\u200d Health failed")
 		return false
 	}
 }
