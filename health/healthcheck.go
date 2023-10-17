@@ -44,10 +44,10 @@ func (hm *HealthCheckClient) Success(message string) bool {
 	return hm.ping(Success, message)
 }
 
-func (hm *HealthCheckClient) Failed(message string) bool {
-	hm.log.Info().Str("network", hm.network).Msg("❤️‍🩹  Health failed")
+func (hm *HealthCheckClient) Failed(err error) bool {
+	hm.log.Error().Err(err).Str("network", hm.network).Msg("❤️‍🩹  Health failed")
 
-	return hm.ping(Fail, message)
+	return hm.ping(Fail, err.Error())
 }
 
 func (hm *HealthCheckClient) ping(ptype PingType, message string) bool {

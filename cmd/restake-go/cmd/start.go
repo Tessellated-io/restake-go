@@ -46,7 +46,6 @@ var startCmd = &cobra.Command{
 
 		// Load config
 		expandedConfigFile := expandHomeDir(configFile)
-		fmt.Printf("expanded: %s (%s)\n", expandedConfigFile, configFile)
 		configOk := os2.FileExists(expandedConfigFile)
 		if !configOk {
 			panic(fmt.Sprintf("Failed to load config file at: %s", configFile))
@@ -106,8 +105,6 @@ var startCmd = &cobra.Command{
 					healthClient.Start("start")
 					err := restakeManager.Restake(timeoutContext)
 					if err != nil {
-						fmt.Printf("FAILED on network %s: %s\n", restakeManager.Network(), err)
-
 						healthClient.Failed(err.Error())
 					} else {
 						healthClient.Success("Hooray!")

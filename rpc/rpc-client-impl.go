@@ -378,10 +378,6 @@ func retrievePaginatedData[DataType any](
 		var rpcResponse *paginatedRpcResponse[DataType]
 		err = retry.Do(func() error {
 			rpcResponse, err = retrievePageFn(ctx, nextKey)
-			fmt.Println("RESP")
-			fmt.Println(rpcResponse)
-			fmt.Println(err)
-			fmt.Println("END RESP")
 			if err != nil {
 				return err
 			}
@@ -393,10 +389,6 @@ func retrievePaginatedData[DataType any](
 		}
 
 		// Append the data
-		fmt.Println(err)
-		fmt.Println(rpcResponse)
-		fmt.Println(rpcResponse.data)
-		fmt.Println(rpcResponse.data)
 		data = append(data, rpcResponse.data...)
 		r.log.Debug().Int("num in page", len(rpcResponse.data)).Int("total fetched", len(data)).Msg(fmt.Sprintf("Fetched page of %s", noun))
 

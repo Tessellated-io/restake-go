@@ -1,24 +1,13 @@
-\- default gas price increase
-- pull blocks
-- consider grant sizes or limits and query them correctly
+- default gas price increase
 
 - print out what the gas fee is
-- configure restake time
-- Fix default config parsing
-- Rip out sleep
 - healthchecks only on success pings or obvious failures? 
 
-- fix package in go.mod
-
-- version
-- cmd and such
 - handle ^C
 - upgrade pickaxe
 - header + credits 
 
 - return 1 or n errors from retry
 - min restake amount in mine
-
-- default args
 
 - README + branding
