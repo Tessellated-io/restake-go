@@ -8,6 +8,7 @@ import (
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
+	"github.com/restake-go/log"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
 
@@ -21,7 +22,6 @@ import (
 	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/restake-go/log"
 )
 
 // Page size to use

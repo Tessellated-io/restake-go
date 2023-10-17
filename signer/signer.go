@@ -83,7 +83,7 @@ func (s *Signer) SendMessages(
 
 	// Try to send a few times
 	for i := 0; i < 5; i++ {
-		// TODO: if the tx broadcast but did not confirm, let's increase gas then try agin. otherwise, try again.
+		// TODO: if the tx broadcast but did not confirm, let's increase gas then try again. otherwise, try again.
 		// TODO: After fixing above, make sure that we're not throwing retries into the rpc client
 		// TODO: Clean up this text
 		// TODO: mess with these return codes from RPC Client
