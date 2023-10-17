@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/restake-go/config"
-	"github.com/restake-go/log"
-	"github.com/restake-go/rpc"
-	"github.com/restake-go/signer"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/crypto"
+	"github.com/tessellated-io/restake-go/config"
+	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/restake-go/rpc"
+	"github.com/tessellated-io/restake-go/signer"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -98,7 +98,7 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 	}
 
 	validGrants := arrays.Filter(allGrants, isValidGrant)
-	r.log.Info().Int("valid grants", len(validGrants)).Msg("..Found valid grants")
+	r.log.Info().Int("valid grants", len(validGrants)).Msg("Found valid grants")
 
 	// Map to balances and then filter by rewards
 	validDelegators := arrays.Map(validGrants, func(input *authztypes.GrantAuthorization) string { return input.Granter })

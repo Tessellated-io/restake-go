@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/restake-go/log"
+	"github.com/tessellated-io/restake-go/log"
 )
 
 type PingType string
@@ -45,7 +45,7 @@ func (hm *HealthCheckClient) Success(message string) bool {
 }
 
 func (hm *HealthCheckClient) Failed(message string) bool {
-	hm.log.Info().Str("network", hm.network).Msg("\u200d Health failed")
+	hm.log.Info().Str("network", hm.network).Msg("❤️‍🩹  Health failed")
 
 	return hm.ping(Fail, message)
 }

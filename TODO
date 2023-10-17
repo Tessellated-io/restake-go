@@ -1,10 +1,5 @@
-- Periodically reconnect the clients?\
-- Context with timeout
-
-- make makefile work
-- default gas price increase
+\- default gas price increase
 - pull blocks
-- what is with too many pings
 - consider grant sizes or limits and query them correctly
 
 - print out what the gas fee is
@@ -14,3 +9,16 @@
 - healthchecks only on success pings or obvious failures? 
 
 - fix package in go.mod
+
+- version
+- cmd and such
+- handle ^C
+- upgrade pickaxe
+- header + credits 
+
+- return 1 or n errors from retry
+- min restake amount in mine
+
+- default args
+
+- README + branding

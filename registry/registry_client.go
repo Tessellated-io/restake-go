@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -23,21 +25,21 @@ func NewRegistryClient() *RegistryClient {
 	}
 }
 
-func (rc *RegistryClient) GetRestakeChains(targetValidator string) ([]Chain, error) {
+func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator string) ([]Chain, error) {
 	var chains []Chain
 	var err error
 
 	err = retry.Do(func() error {
-		chains, err = rc.getRestakeChains(targetValidator)
+		chains, err = rc.getRestakeChains(ctx, targetValidator)
 		return err
-	}, rc.delay, rc.attempts)
+	}, rc.delay, rc.attempts, retry.Context(ctx))
 
 	return chains, err
 }
 
 // Internal method without retries
-func (rc *RegistryClient) getRestakeChains(targetValidator string) ([]Chain, error) {
-	validators, err := rc.getValidatorsWithRetries()
+func (rc *RegistryClient) getRestakeChains(ctx context.Context, targetValidator string) ([]Chain, error) {
+	validators, err := rc.getValidatorsWithRetries(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,22 +56,22 @@ func (rc *RegistryClient) getRestakeChains(targetValidator string) ([]Chain, err
 	return validChains, nil
 }
 
-func (rc *RegistryClient) GetChainInfo(chainName string) (*ChainInfo, error) {
+func (rc *RegistryClient) GetChainInfo(ctx context.Context, chainName string) (*ChainInfo, error) {
 	var chainInfo *ChainInfo
 	var err error
 
 	err = retry.Do(func() error {
-		chainInfo, err = rc.getChainInfo(chainName)
+		chainInfo, err = rc.getChainInfo(ctx, chainName)
 		return err
-	}, rc.delay, rc.attempts)
+	}, rc.delay, rc.attempts, retry.Context(ctx))
 
 	return chainInfo, err
 }
 
 // Internal method without retries
-func (rc *RegistryClient) getChainInfo(chainName string) (*ChainInfo, error) {
+func (rc *RegistryClient) getChainInfo(ctx context.Context, chainName string) (*ChainInfo, error) {
 	url := fmt.Sprintf("https://proxy.atomscan.com/directory/%s/chain.json", chainName)
-	bytes, err := rc.makeRequest(url)
+	bytes, err := rc.makeRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -90,20 +92,20 @@ func (rc *RegistryClient) extractValidator(targetValidator string, validators []
 	return nil, fmt.Errorf("unable to find a validator with name \"%s\"", targetValidator)
 }
 
-func (rc *RegistryClient) getValidatorsWithRetries() ([]Validator, error) {
+func (rc *RegistryClient) getValidatorsWithRetries(ctx context.Context) ([]Validator, error) {
 	var validators []Validator
 	var err error
 
 	err = retry.Do(func() error {
-		validators, err = rc.getValidators()
+		validators, err = rc.getValidators(ctx)
 		return err
-	}, rc.delay, rc.attempts)
+	}, rc.delay, rc.attempts, retry.Context(ctx))
 
 	return validators, err
 }
 
-func (rc *RegistryClient) getValidators() ([]Validator, error) {
-	bytes, err := rc.makeRequest("https://validators.cosmos.directory/")
+func (rc *RegistryClient) getValidators(ctx context.Context) ([]Validator, error) {
+	bytes, err := rc.makeRequest(ctx, "https://validators.cosmos.directory/")
 	if err != nil {
 		return nil, err
 	}
@@ -115,10 +117,16 @@ func (rc *RegistryClient) getValidators() ([]Validator, error) {
 	return response.Validators, nil
 }
 
-func (rc *RegistryClient) makeRequest(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func (rc *RegistryClient) makeRequest(ctx context.Context, url string) ([]byte, error) {
+	request, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(request)
+	if err != nil {
+		log.Fatalf("Error making request: %v", err)
 	}
 	defer resp.Body.Close()
 

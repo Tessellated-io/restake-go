@@ -8,9 +8,9 @@ import (
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
-	"github.com/restake-go/log"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
+	"github.com/tessellated-io/restake-go/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -89,7 +89,7 @@ func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, valida
 	err = retry.Do(func() error {
 		chainInfo, err = r.getPendingRewards(ctx, delegator, validator, stakingDenom)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
 
 	return chainInfo, err
 }
@@ -140,12 +140,13 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 
 	// If successful, attempt to poll for deliver
 	if response.TxResponse.Code == 0 {
+		pollDelay := 30 * time.Second
 		r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
-		time.Sleep(30 * time.Second)
+		time.Sleep(pollDelay)
 
 		err = retry.Do(func() error {
 			return r.checkConfirmed(ctx, response.TxResponse.TxHash)
-		}, retry.Delay(30*time.Second), retry.Attempts(10))
+		}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
 
 		if err != nil {
 			return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
@@ -188,7 +189,7 @@ func (r *rpcClientImpl) GetAccountData(ctx context.Context, address string) (*Ac
 	err = retry.Do(func() error {
 		accountData, err = r.getAccountData(ctx, address)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
 
 	return accountData, err
 }
@@ -230,7 +231,7 @@ func (r *rpcClientImpl) SimulateTx(
 	err = retry.Do(func() error {
 		simulationResult, err = r.simulateTx(ctx, tx, txConfig, gasFactor)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
 
 	return simulationResult, err
 }
@@ -269,7 +270,7 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*au
 	err = retry.Do(func() error {
 		grants, err = r.getGrants(ctx, botAddress)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
 
 	return grants, err
 }
@@ -316,7 +317,7 @@ func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress stri
 	err = retry.Do(func() error {
 		delegators, err = r.getDelegators(ctx, validatorAddress)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
 
 	return delegators, err
 }
@@ -377,17 +378,25 @@ func retrievePaginatedData[DataType any](
 		var rpcResponse *paginatedRpcResponse[DataType]
 		err = retry.Do(func() error {
 			rpcResponse, err = retrievePageFn(ctx, nextKey)
+			fmt.Println("RESP")
+			fmt.Println(rpcResponse)
+			fmt.Println(err)
+			fmt.Println("END RESP")
 			if err != nil {
-				return nil
+				return err
 			}
 			return nil
-		}, r.delay, r.attempts)
+		}, r.delay, r.attempts, retry.Context(ctx))
 
 		if err != nil {
 			return nil, err
 		}
 
 		// Append the data
+		fmt.Println(err)
+		fmt.Println(rpcResponse)
+		fmt.Println(rpcResponse.data)
+		fmt.Println(rpcResponse.data)
 		data = append(data, rpcResponse.data...)
 		r.log.Debug().Int("num in page", len(rpcResponse.data)).Int("total fetched", len(data)).Msg(fmt.Sprintf("Fetched page of %s", noun))
 
