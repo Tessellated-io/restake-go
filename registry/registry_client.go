@@ -5,18 +5,39 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	retry "github.com/avast/retry-go/v4"
 	"github.com/tessellated-io/pickaxe/arrays"
 )
 
-type RegistryClient struct{}
+type RegistryClient struct {
+	attempts retry.Option
+	delay    retry.Option
+}
 
 func NewRegistryClient() *RegistryClient {
-	return &RegistryClient{}
+	return &RegistryClient{
+		attempts: retry.Attempts(5),
+		delay:    retry.Delay(1 * time.Second),
+	}
 }
 
 func (rc *RegistryClient) GetRestakeChains(targetValidator string) ([]Chain, error) {
-	validators, err := rc.getValidators()
+	var chains []Chain
+	var err error
+
+	err = retry.Do(func() error {
+		chains, err = rc.getRestakeChains(targetValidator)
+		return err
+	}, rc.delay, rc.attempts)
+
+	return chains, err
+}
+
+// Internal method without retries
+func (rc *RegistryClient) getRestakeChains(targetValidator string) ([]Chain, error) {
+	validators, err := rc.getValidatorsWithRetries()
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +55,19 @@ func (rc *RegistryClient) GetRestakeChains(targetValidator string) ([]Chain, err
 }
 
 func (rc *RegistryClient) GetChainInfo(chainName string) (*ChainInfo, error) {
+	var chainInfo *ChainInfo
+	var err error
+
+	err = retry.Do(func() error {
+		chainInfo, err = rc.getChainInfo(chainName)
+		return err
+	}, rc.delay, rc.attempts)
+
+	return chainInfo, err
+}
+
+// Internal method without retries
+func (rc *RegistryClient) getChainInfo(chainName string) (*ChainInfo, error) {
 	url := fmt.Sprintf("https://proxy.atomscan.com/directory/%s/chain.json", chainName)
 	bytes, err := rc.makeRequest(url)
 	if err != nil {
@@ -47,8 +81,8 @@ func (rc *RegistryClient) GetChainInfo(chainName string) (*ChainInfo, error) {
 	return chainInfo, nil
 }
 
-func (rc *RegistryClient) extractValidator(targetValidator string, validators *[]Validator) (*Validator, error) {
-	for _, validator := range *validators {
+func (rc *RegistryClient) extractValidator(targetValidator string, validators []Validator) (*Validator, error) {
+	for _, validator := range validators {
 		if strings.EqualFold(targetValidator, validator.Name) {
 			return &validator, nil
 		}
@@ -56,7 +90,19 @@ func (rc *RegistryClient) extractValidator(targetValidator string, validators *[
 	return nil, fmt.Errorf("unable to find a validator with name \"%s\"", targetValidator)
 }
 
-func (rc *RegistryClient) getValidators() (*[]Validator, error) {
+func (rc *RegistryClient) getValidatorsWithRetries() ([]Validator, error) {
+	var validators []Validator
+	var err error
+
+	err = retry.Do(func() error {
+		validators, err = rc.getValidators()
+		return err
+	}, rc.delay, rc.attempts)
+
+	return validators, err
+}
+
+func (rc *RegistryClient) getValidators() ([]Validator, error) {
 	bytes, err := rc.makeRequest("https://validators.cosmos.directory/")
 	if err != nil {
 		return nil, err
@@ -66,7 +112,7 @@ func (rc *RegistryClient) getValidators() (*[]Validator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &(response.Validators), nil
+	return response.Validators, nil
 }
 
 func (rc *RegistryClient) makeRequest(url string) ([]byte, error) {

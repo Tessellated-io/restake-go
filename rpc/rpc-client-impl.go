@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/restake-go/sleep"
+	retry "github.com/avast/retry-go/v4"
+	"github.com/restake-go/log"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
 
@@ -35,6 +36,11 @@ type rpcClientImpl struct {
 	distributionClient distributiontypes.QueryClient
 	stakingClient      stakingtypes.QueryClient
 	txClient           txtypes.ServiceClient
+
+	attempts retry.Option
+	delay    retry.Option
+
+	log *log.Logger
 }
 
 // A struct that came back from an RPC query
@@ -47,10 +53,10 @@ type paginatedRpcResponse[dataType any] struct {
 var _ RpcClient = (*rpcClientImpl)(nil)
 
 // NewRpcClient makes a new RpcClient for the Restake Go App.
-func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec) (RpcClient, error) {
+func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec, log *log.Logger) (RpcClient, error) {
 	conn, err := grpc.GetGrpcConnection(nodeGrpcUri)
 	if err != nil {
-		fmt.Printf("Unable to connect to gRPC at URL %s: %s\n", nodeGrpcUri, err)
+		log.Error().Str("grpc url", nodeGrpcUri).Err(err).Msg("Unable to connect to gRPC")
 		return nil, err
 	}
 
@@ -68,38 +74,51 @@ func NewRpcClient(nodeGrpcUri string, cdc *codec.ProtoCodec) (RpcClient, error) 
 		distributionClient: distributionClient,
 		stakingClient:      stakingClient,
 		txClient:           txClient,
+
+		attempts: retry.Attempts(5),
+		delay:    retry.Delay(1 * time.Second),
+
+		log: log,
 	}, nil
 }
 
-func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) sdk.Dec {
-	fmt.Printf("...Fetching pending rewards for %s\n", delegator)
+func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) (sdk.Dec, error) {
+	var chainInfo sdk.Dec
+	var err error
 
+	err = retry.Do(func() error {
+		chainInfo, err = r.getPendingRewards(ctx, delegator, validator, stakingDenom)
+		return err
+	}, r.delay, r.attempts)
+
+	return chainInfo, err
+}
+
+// private function with retries
+func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) (sdk.Dec, error) {
 	request := &distributiontypes.QueryDelegationTotalRewardsRequest{
 		DelegatorAddress: delegator,
 	}
-	for {
-		response, err := r.distributionClient.DelegationTotalRewards(ctx, request)
-		if err != nil {
-			fmt.Printf("Error fetching balances for %s: %s\n", delegator, err)
-			sleep.Sleep()
-			continue
-		}
 
-		for _, reward := range response.Rewards {
-			if strings.EqualFold(validator, reward.ValidatorAddress) {
-				for _, coin := range reward.Reward {
-					if strings.EqualFold(coin.Denom, stakingDenom) {
-						return coin.Amount
-					}
+	response, err := r.distributionClient.DelegationTotalRewards(ctx, request)
+	if err != nil {
+		return sdk.NewDec(0), err
+	}
+
+	for _, reward := range response.Rewards {
+		if strings.EqualFold(validator, reward.ValidatorAddress) {
+			for _, coin := range reward.Reward {
+				if strings.EqualFold(coin.Denom, stakingDenom) {
+					return coin.Amount, nil
 				}
 			}
 		}
-
-		fmt.Printf("Failed to find a reward denom matching %s for validator %s \n", stakingDenom, validator)
-		return sdk.NewDec(0)
 	}
+
+	return sdk.NewDec(0), fmt.Errorf("unable to find staking reward denom %s", stakingDenom)
 }
 
+// BroadcastTxResponse may or may not be populated in the response.
 func (r *rpcClientImpl) BroadcastTxAndWait(
 	ctx context.Context,
 	txBytes []byte,
@@ -119,29 +138,40 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 		return nil, err
 	}
 
-	// If successful, return
+	// If successful, attempt to poll for deliver
 	if response.TxResponse.Code == 0 {
-		r.waitForConfirmation(ctx, response.TxResponse.TxHash)
+		r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
+		time.Sleep(30 * time.Second)
+
+		err = retry.Do(func() error {
+			return r.checkConfirmed(ctx, response.TxResponse.TxHash)
+		}, retry.Delay(30*time.Second), retry.Attempts(10))
+
+		if err != nil {
+			return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
+		} else {
+			return response, nil
+		}
+
+	} else {
+		return response, fmt.Errorf("error sending transaction: %s", response.TxResponse.RawLog)
 	}
-	return response, nil
 }
 
-func (r *rpcClientImpl) waitForConfirmation(ctx context.Context, txHash string) {
-	fmt.Printf("Polling for inclusion of tx %s\n", txHash)
-	for {
-		time.Sleep(5 * time.Second)
-		status, err := r.getTxStatus(ctx, txHash)
-		if err != nil {
-			fmt.Printf("Error querying tx status: %s\n", err)
-			continue
+// Returns nil if the transaction is in a block
+func (r *rpcClientImpl) checkConfirmed(ctx context.Context, txHash string) error {
+	status, err := r.getTxStatus(ctx, txHash)
+	if err != nil {
+		r.log.Error().Err(err).Msg("Error querying tx status")
+		return err
+	} else {
+		height := status.TxResponse.Height
+		if height != 0 {
+			r.log.Info().Err(err).Str("tx hash", txHash).Int64("height", height).Msg("Transaction confirmed")
+			return nil
 		} else {
-			height := status.TxResponse.Height
-			if height != 0 {
-				fmt.Printf("Transaction with hash %s confirmed at height %d\n", txHash, height)
-				return
-			} else {
-				fmt.Printf("Transaction still not confirmed, still waiting...\n")
-			}
+			r.log.Warn().Msg("Transaction still not confirmed, still waiting...")
+			return fmt.Errorf("transaction not yet confirmed")
 		}
 	}
 }
@@ -152,6 +182,19 @@ func (r *rpcClientImpl) getTxStatus(ctx context.Context, txHash string) (*txtype
 }
 
 func (r *rpcClientImpl) GetAccountData(ctx context.Context, address string) (*AccountData, error) {
+	var accountData *AccountData
+	var err error
+
+	err = retry.Do(func() error {
+		accountData, err = r.getAccountData(ctx, address)
+		return err
+	}, r.delay, r.attempts)
+
+	return accountData, err
+}
+
+// private function without retries
+func (r *rpcClientImpl) getAccountData(ctx context.Context, address string) (*AccountData, error) {
 	// Make a query
 	query := &authtypes.QueryAccountRequest{Address: address}
 	res, err := r.authClient.Account(
@@ -181,6 +224,24 @@ func (r *rpcClientImpl) SimulateTx(
 	txConfig client.TxConfig,
 	gasFactor float64,
 ) (*SimulationResult, error) {
+	var simulationResult *SimulationResult
+	var err error
+
+	err = retry.Do(func() error {
+		simulationResult, err = r.simulateTx(ctx, tx, txConfig, gasFactor)
+		return err
+	}, r.delay, r.attempts)
+
+	return simulationResult, err
+}
+
+// private function without retries
+func (r *rpcClientImpl) simulateTx(
+	ctx context.Context,
+	tx authsigning.Tx,
+	txConfig client.TxConfig,
+	gasFactor float64,
+) (*SimulationResult, error) {
 	// Form a query
 	encoder := txConfig.TxEncoder()
 	txBytes, err := encoder(tx)
@@ -201,8 +262,21 @@ func (r *rpcClientImpl) SimulateTx(
 	}, nil
 }
 
-func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) []*authztypes.GrantAuthorization {
-	fmt.Printf("...Fetching grants for bot %s\n", botAddress)
+func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*authztypes.GrantAuthorization, error) {
+	var grants []*authztypes.GrantAuthorization
+	var err error
+
+	err = retry.Do(func() error {
+		grants, err = r.getGrants(ctx, botAddress)
+		return err
+	}, r.delay, r.attempts)
+
+	return grants, err
+}
+
+// private function without retries
+func (r *rpcClientImpl) getGrants(ctx context.Context, botAddress string) ([]*authztypes.GrantAuthorization, error) {
+	r.log.Info().Str("bot address", botAddress).Msg("Fetching grants for bot")
 
 	getGrantsFunc := func(ctx context.Context, pageKey []byte) (*paginatedRpcResponse[*authztypes.GrantAuthorization], error) {
 		pagination := &query.PageRequest{
@@ -226,13 +300,28 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) []*aut
 		}, nil
 	}
 
-	grants := retrievePaginatedData(ctx, r, "grants", getGrantsFunc)
-	fmt.Printf("	...Retrieved %d grants for %s\n", len(grants), botAddress)
+	grants, err := retrievePaginatedData(ctx, r, "grants", getGrantsFunc)
+	if err != nil {
+		r.log.Error().Err(err).Str("bot address", botAddress).Msg("Failed to retrieve grants")
+	}
+	r.log.Info().Int("num grants", len(grants)).Str("bot address", botAddress).Msg("Retrieved grants")
 
-	return grants
+	return grants, nil
 }
 
-func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress string) []string {
+func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress string) ([]string, error) {
+	var delegators []string
+	var err error
+
+	err = retry.Do(func() error {
+		delegators, err = r.getDelegators(ctx, validatorAddress)
+		return err
+	}, r.delay, r.attempts)
+
+	return delegators, err
+}
+
+func (r *rpcClientImpl) getDelegators(ctx context.Context, validatorAddress string) ([]string, error) {
 	transformFunc := func(input stakingtypes.DelegationResponse) string { return input.Delegation.DelegatorAddress }
 
 	fetchDelegatorPageFunc := func(ctx context.Context, pageKey []byte) (*paginatedRpcResponse[string], error) {
@@ -257,15 +346,17 @@ func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress stri
 		}, nil
 	}
 
-	delegators := retrievePaginatedData(ctx, r, "delegations", fetchDelegatorPageFunc)
-	fmt.Printf("	...Retrieved %d delegations for %s\n", len(delegators), validatorAddress)
+	delegators, err := retrievePaginatedData(ctx, r, "delegations", fetchDelegatorPageFunc)
+	if err != nil {
+		return nil, err
+	}
+	r.log.Info().Str("validator address", validatorAddress).Int("num delegators", len(delegators)).Msg("Retrieved delegations")
 
-	return delegators
+	return delegators, nil
 }
 
 // Pagination
 // NOTE: Implemented as a private standalone func since go doesn't seem to support generics on struct methods.
-
 func retrievePaginatedData[DataType any](
 	ctx context.Context,
 	r *rpcClientImpl,
@@ -274,24 +365,31 @@ func retrievePaginatedData[DataType any](
 		ctx context.Context,
 		nextKey []byte,
 	) (*paginatedRpcResponse[DataType], error),
-) []DataType {
+) ([]DataType, error) {
 	// Running list of data
 	data := []DataType{}
+	var err error
 
 	// Loop through all pages
 	var nextKey []byte
 	for {
-		// Query the page, ditching if we fail to retry
-		rpcResponse, err := retrievePageFn(ctx, nextKey)
+		// Query the page, retrying and then giving up if we exceed attempts
+		var rpcResponse *paginatedRpcResponse[DataType]
+		err = retry.Do(func() error {
+			rpcResponse, err = retrievePageFn(ctx, nextKey)
+			if err != nil {
+				return nil
+			}
+			return nil
+		}, r.delay, r.attempts)
+
 		if err != nil {
-			fmt.Printf("Error fetching %s: %s\n", noun, err)
-			sleep.Sleep()
-			continue
+			return nil, err
 		}
 
 		// Append the data
 		data = append(data, rpcResponse.data...)
-		fmt.Printf("	...Fetched a page of %d %s (total: %d)\n", len(rpcResponse.data), noun, len(data))
+		r.log.Debug().Int("num in page", len(rpcResponse.data)).Int("total fetched", len(data)).Msg(fmt.Sprintf("Fetched page of %s", noun))
 
 		// Update next key or break out of loop if we have finished
 		if len(rpcResponse.nextKey) == 0 {
@@ -300,5 +398,5 @@ func retrievePaginatedData[DataType any](
 		nextKey = rpcResponse.nextKey
 	}
 
-	return data
+	return data, nil
 }

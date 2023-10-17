@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
+	"github.com/restake-go/log"
 	"github.com/restake-go/rpc"
-	"github.com/restake-go/sleep"
 	"github.com/tessellated-io/pickaxe/crypto"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -39,6 +40,8 @@ type Signer struct {
 	memo          string
 
 	bytesSigner crypto.BytesSigner
+
+	log *log.Logger
 }
 
 func NewSigner(
@@ -51,6 +54,7 @@ func NewSigner(
 	rpcClient rpc.RpcClient,
 	memo string,
 	feeDenom string,
+	log *log.Logger,
 ) *Signer {
 	return &Signer{
 		cdc: cdc,
@@ -66,47 +70,56 @@ func NewSigner(
 		memo:          memo,
 
 		bytesSigner: bytesSigner,
+
+		log: log,
 	}
 }
 
 func (s *Signer) SendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
-) {
-	// TODO: Clean up this text
-	// TODO: mess with these return codes from RPC Client
-	for {
-		result, gasWanted, err := s.sendMessages(ctx, msgs)
+) error {
+	var err error
+
+	// Try to send a few times
+	for i := 0; i < 5; i++ {
+		// TODO: if the tx broadcast but did not confirm, let's increase gas then try again. otherwise, try again.
+		// TODO: After fixing above, make sure that we're not throwing retries into the rpc client
+		// TODO: Clean up this text
+		// TODO: mess with these return codes from RPC Client
+		var result *txtypes.BroadcastTxResponse
+		var gasWanted uint64
+		result, gasWanted, err = s.sendMessages(ctx, msgs)
 		if err != nil {
-			fmt.Printf("Error broadcasting: %s\n", err)
+			s.log.Error().Err(err).Msg("Error broadcasting transaction")
 			continue
 		}
 
 		code := result.TxResponse.Code
 		logs := result.TxResponse.RawLog
 		if code == 13 {
-			maybeNewMinFee, err := extractMinGlobalFee(logs)
+			maybeNewMinFee, err := s.extractMinGlobalFee(logs)
 			if err == nil {
-				fmt.Println("Adjusting gas price due to Evmos/EVM error")
-				fmt.Println(result.String())
+				s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
 				s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
 				continue
 			} else {
-				fmt.Printf("Need more gas, increasing gas price. Code: %d, Logs: %s\n", code, logs)
+				s.log.Info().Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
 				s.gasPrice += feeIncrement
-				sleep.Sleep()
+				time.Sleep(30 * time.Second)
 				continue
 			}
 		} else if code != 0 {
-			fmt.Printf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s\n", code, logs)
-			sleep.Sleep()
+			s.log.Info().Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
 		hash := result.TxResponse.TxHash
-		fmt.Printf("Sent transactions in hash %s\n", hash)
-		return
+		s.log.Info().Str("tx hash", hash).Msg("Transaction sent and included in block")
+		return nil
 	}
+	return fmt.Errorf("error broadcasting tx: %s", err.Error())
 }
 
 func (s *Signer) sendMessages(
@@ -117,7 +130,7 @@ func (s *Signer) sendMessages(
 	address := s.bytesSigner.GetAddress(s.addressPrefix)
 	accountData, err := s.rpcClient.GetAccountData(ctx, address)
 	if err != nil {
-		fmt.Printf("Error getting account data for %s: %s", s.bytesSigner.GetAddress(s.addressPrefix), err)
+		s.log.Error().Err(err).Str("signer address", s.bytesSigner.GetAddress(s.addressPrefix)).Msg("Error getting account data")
 		return nil, 0, err
 	}
 
@@ -166,7 +179,6 @@ func (s *Signer) sendMessages(
 	}
 
 	result, err := s.rpcClient.BroadcastTxAndWait(ctx, signedTx)
-
 	return result, simulationResult.GasRecommendation, err
 }
 
@@ -216,7 +228,7 @@ func (s *Signer) signTx(
 }
 
 // extractMinGlobalFee is useful for evmos, or other EVMs in the Tendermint space
-func extractMinGlobalFee(errMsg string) (int, error) {
+func (s *Signer) extractMinGlobalFee(errMsg string) (int, error) {
 	pattern := `provided fee < minimum global fee \((\d+)aevmos < (\d+)aevmos\). Please increase the gas price.: insufficient fee`
 	re := regexp.MustCompile(pattern)
 
@@ -224,7 +236,7 @@ func extractMinGlobalFee(errMsg string) (int, error) {
 	if len(matches) == 0 && len(matches) > 2 {
 		converted, err := strconv.Atoi(matches[2])
 		if err != nil {
-			fmt.Printf("Found a matching eth / evmos error, but failed to atoi it: %s", err)
+			s.log.Error().Err(err).Msg("Found a matching eth / evmos error, but failed to atoi it")
 			return 0, nil
 		}
 		return converted, nil
