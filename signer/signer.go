@@ -72,11 +72,16 @@ func NewSigner(
 func (s *Signer) SendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
-) {
-	// TODO: Clean up this text
-	// TODO: mess with these return codes from RPC Client
-	for {
-		result, gasWanted, err := s.sendMessages(ctx, msgs)
+) error {
+	var err error
+
+	// Try to send a few times
+	for i := 0; i < 5; i++ {
+		// TODO: Clean up this text
+		// TODO: mess with these return codes from RPC Client
+		var result *txtypes.BroadcastTxResponse
+		var gasWanted uint64
+		result, gasWanted, err = s.sendMessages(ctx, msgs)
 		if err != nil {
 			fmt.Printf("Error broadcasting: %s\n", err)
 			continue
@@ -105,8 +110,9 @@ func (s *Signer) SendMessages(
 
 		hash := result.TxResponse.TxHash
 		fmt.Printf("Sent transactions in hash %s\n", hash)
-		return
+		return nil
 	}
+	return fmt.Errorf("error broadcasting tx: %s", err.Error())
 }
 
 func (s *Signer) sendMessages(
@@ -166,7 +172,6 @@ func (s *Signer) sendMessages(
 	}
 
 	result, err := s.rpcClient.BroadcastTxAndWait(ctx, signedTx)
-
 	return result, simulationResult.GasRecommendation, err
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/restake-go/config"
-	"github.com/restake-go/health"
 	"github.com/restake-go/rpc"
 	"github.com/restake-go/signer"
 	"github.com/tessellated-io/pickaxe/arrays"
@@ -30,8 +29,6 @@ type RestakeManager struct {
 
 	addressPrefix string
 	signer        *signer.Signer
-
-	healthClient *health.HealthCheckClient
 }
 
 func NewRestakeManager(
@@ -85,23 +82,31 @@ type restakeTarget struct {
 // TODO: Rip out unused rpc methods
 func (r *RestakeManager) Restake(ctx context.Context) error {
 	// Get all delegators and grants to the bot
-	// allDelegators := r.rpcClient.GetDelegators(ctx, r.validatorAddress)
-	allGrants := r.rpcClient.GetGrants(ctx, r.botAddress)
+	allGrants, err := r.rpcClient.GetGrants(ctx, r.botAddress)
+	if err != nil {
+		return err
+	}
+
 	validGrants := arrays.Filter(allGrants, isValidGrant)
 	fmt.Printf("	...Found %d valid grants\n", len(validGrants))
 
 	// Map to balances and then filter by rewards
 	validDelegators := arrays.Map(validGrants, func(input *authztypes.GrantAuthorization) string { return input.Granter })
-	restakeTargets := arrays.Map(validDelegators, func(input string) *restakeTarget {
+	restakeTargets := []*restakeTarget{}
+	for _, validDelegator := range validDelegators {
 		// Fetch total rewards
-		totalRewards := r.rpcClient.GetPendingRewards(ctx, input, r.validatorAddress, r.stakingToken)
-		fmt.Printf("	...Delegator %s has %s %s in delegation rewards\n", input, totalRewards, r.stakingToken)
+		totalRewards, err := r.rpcClient.GetPendingRewards(ctx, validDelegator, r.validatorAddress, r.stakingToken)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("	...Delegator %s has %s %s in delegation rewards\n", validDelegator, totalRewards, r.stakingToken)
 
-		return &restakeTarget{
-			delegator: input,
+		restakeTarget := &restakeTarget{
+			delegator: validDelegator,
 			amount:    totalRewards,
 		}
-	})
+		restakeTargets = append(restakeTargets, restakeTarget)
+	}
 	targetsAboveMinimum := arrays.Filter(restakeTargets, func(input *restakeTarget) bool {
 		return input.amount.GTE(r.minRewards)
 	})
@@ -109,16 +114,13 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 
 	// Restake all delegators
 	if len(targetsAboveMinimum) > 0 {
-		r.restakeDelegators(ctx, targetsAboveMinimum)
-		r.healthClient.Success("hurrah")
-	} else {
-		r.healthClient.Failed("no valid grants found")
+		return r.restakeDelegators(ctx, targetsAboveMinimum)
 	}
 
-	return nil
+	return fmt.Errorf("no valid grants found")
 }
 
-func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*restakeTarget) {
+func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*restakeTarget) error {
 	delegateMsgs := []sdk.Msg{}
 	for _, target := range targets {
 		// Form our messages
@@ -150,7 +152,7 @@ func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*resta
 		Msgs:    msgsAny,
 	}
 
-	r.signer.SendMessages(ctx, []sdk.Msg{&execMessage})
+	return r.signer.SendMessages(ctx, []sdk.Msg{&execMessage})
 }
 
 func (r *RestakeManager) Network() string {

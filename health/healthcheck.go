@@ -34,7 +34,7 @@ func (hm *HealthCheckClient) Start(message string) bool {
 }
 
 func (hm *HealthCheckClient) Success(message string) bool {
-	fmt.Println("❤️ Health success on", hm.network)
+	fmt.Println("❤️  Health success on", hm.network)
 	return hm.ping(Success, message)
 }
 

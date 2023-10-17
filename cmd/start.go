@@ -6,6 +6,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cometbft/cometbft/libs/os"
@@ -74,8 +75,14 @@ var startCmd = &cobra.Command{
 		}
 
 		for {
+			var wg sync.WaitGroup
+
 			for idx, restakeClient := range restakeManagers {
-				go func(restakeClient *restake.RestakeManager, healthClient *health.HealthCheckClient) {
+				wg.Add(1) // Increment the counter
+
+				func(restakeClient *restake.RestakeManager, healthClient *health.HealthCheckClient) {
+					defer wg.Done() // Ensure Done() is called once the function completes
+
 					startMessage := fmt.Sprintf("\n✨ Starting Restake on %s\n", restakeClient.Network())
 					fmt.Println(startMessage)
 					healthClient.Start(startMessage)
@@ -87,6 +94,9 @@ var startCmd = &cobra.Command{
 					}
 				}(restakeClient, healthClients[idx])
 			}
+
+			wg.Wait() // Wait for all workers to finish
+
 			fmt.Printf("Finished restaking. Will start the next round in %d hours\n", config.SleepTimeHours)
 			time.Sleep(time.Duration(config.SleepTimeHours) * time.Hour)
 		}
