@@ -2,11 +2,13 @@ package signer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/rpc"
@@ -21,9 +23,6 @@ import (
 	txauth "github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
-// TODO: Support increasing fees
-
-// TODO: Determine what this should be?
 const feeIncrement float64 = 0.01
 
 type Signer struct {
@@ -63,7 +62,8 @@ func NewSigner(
 
 		feeDenom:  feeDenom,
 		gasFactor: gasFactor,
-		gasPrice:  gasPrice,
+		// TODO
+		gasPrice: 0, // gasPrice,
 
 		chainID:       chainID,
 		addressPrefix: addressPrefix,
@@ -81,47 +81,99 @@ func (s *Signer) SendMessages(
 ) error {
 	var err error
 
-	// Try to send a few times
+	// Attempt to send a transaction a few times.
 	for i := 0; i < 5; i++ {
-		// TODO: if the tx broadcast but did not confirm, let's increase gas then try again. otherwise, try again.
-		// TODO: After fixing above, make sure that we're not throwing retries into the rpc client
-		// TODO: Clean up this text
-		// TODO: mess with these return codes from RPC Client
+		// Attempt to broadcast
 		var result *txtypes.BroadcastTxResponse
 		var gasWanted uint64
 		result, gasWanted, err = s.sendMessages(ctx, msgs)
+
+		// Give up if we get an error attempting to broadcast.
 		if err != nil {
 			s.log.Error().Err(err).Msg("Error broadcasting transaction")
 			continue
 		}
 
+		// TODO: remove
+		fmt.Println("\nResults:")
+		fmt.Println(result)
+		fmt.Println(gasWanted)
+		fmt.Println(err)
+		fmt.Println("\nEND RESULTS")
+
+		// Extract codes
 		code := result.TxResponse.Code
 		logs := result.TxResponse.RawLog
-		if code == 13 {
-			maybeNewMinFee, err := s.extractMinGlobalFee(logs)
-			if err == nil {
-				s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
-				s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
+
+		if code == 0 {
+			// Code 0 indicates a successful broadcast.
+			txHash := result.TxResponse.TxHash
+
+			pollDelay := 30 * time.Second
+			s.log.Info().Str("tx hash", txHash).Msg("Transaction sent, waiting for inclusion...")
+			time.Sleep(pollDelay)
+
+			err = retry.Do(func() error {
+				return s.rpcClient.CheckConfirmed(ctx, txHash)
+			}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
+			if err != nil {
+				err = errors.Unwrap(err)
+			}
+
+			// If we successfully broadcasted but we are not confirmed, that likely means we need more gas
+			if err != nil {
+				s.log.Info().Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
+				s.gasPrice += feeIncrement
+
+				// Failing for gas seems silly, so let's go ahead and retry.
+				i--
+
 				continue
 			} else {
-				s.log.Info().Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
-				s.gasPrice += feeIncrement
-				time.Sleep(30 * time.Second)
-				continue
+				// Hurrah, things worked out!
+				return nil
 			}
+		} else if code == 13 {
+			// Code 13 indicates too little gas
+			// TODO: Clean up once we know evmos is good.
+			// maybeNewMinFee, err := s.extractMinGlobalFee(logs)
+			// if err == nil {
+			// 	s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
+			// 	s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
+			// 	continue
+			// } else {
+			s.log.Info().Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
+			s.gasPrice += feeIncrement
+
+			// Failing for gas seems silly, so let's go ahead and retry.
+			i--
+
+			continue
+			// }
 		} else if code != 0 {
 			s.log.Info().Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
-			time.Sleep(30 * time.Second)
+			// TODO: remove if converting to retry
+			time.Sleep(5 * time.Second)
 			continue
 		}
-
-		hash := result.TxResponse.TxHash
-		s.log.Info().Str("tx hash", hash).Msg("Transaction sent and included in block")
-		return nil
 	}
-	return fmt.Errorf("error broadcasting tx: %s", err.Error())
+
+	if err != nil {
+		// All tries exhausted, give up and return an error.
+		return fmt.Errorf("error broadcasting tx: %s", err.Error())
+	} else {
+		// Broadcasted but could not confirm
+		return fmt.Errorf("tx broadcasted but was never confirmed. need higher gas prices?")
+	}
+
 }
 
+// TODO: Need gas required?
+// Try to broadcast a transaction containing the given messages.
+// Returns:
+// - a broadcast tx response if it was broadcasted successfully
+// - a gas estimate if one was able to be made
+// - an error if broadcasting couldn't occur
 func (s *Signer) sendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
@@ -227,6 +279,7 @@ func (s *Signer) signTx(
 	return encoder(txb.GetTx())
 }
 
+// TODO: Consider cleaning up
 // extractMinGlobalFee is useful for evmos, or other EVMs in the Tendermint space
 func (s *Signer) extractMinGlobalFee(errMsg string) (int, error) {
 	pattern := `provided fee < minimum global fee \((\d+)aevmos < (\d+)aevmos\). Please increase the gas price.: insufficient fee`

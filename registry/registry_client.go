@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -33,6 +34,9 @@ func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator 
 		chains, err = rc.getRestakeChains(ctx, targetValidator)
 		return err
 	}, rc.delay, rc.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return chains, err
 }
@@ -64,6 +68,9 @@ func (rc *RegistryClient) GetChainInfo(ctx context.Context, chainName string) (*
 		chainInfo, err = rc.getChainInfo(ctx, chainName)
 		return err
 	}, rc.delay, rc.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return chainInfo, err
 }
@@ -100,6 +107,9 @@ func (rc *RegistryClient) getValidatorsWithRetries(ctx context.Context) ([]Valid
 		validators, err = rc.getValidators(ctx)
 		return err
 	}, rc.delay, rc.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return validators, err
 }

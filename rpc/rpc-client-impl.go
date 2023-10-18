@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -90,6 +91,9 @@ func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, valida
 		chainInfo, err = r.getPendingRewards(ctx, delegator, validator, stakingDenom)
 		return err
 	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return chainInfo, err
 }
@@ -118,6 +122,7 @@ func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, valida
 	return sdk.NewDec(0), fmt.Errorf("unable to find staking reward denom %s", stakingDenom)
 }
 
+// TODO: rename
 // BroadcastTxResponse may or may not be populated in the response.
 func (r *rpcClientImpl) BroadcastTxAndWait(
 	ctx context.Context,
@@ -130,37 +135,42 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 	}
 
 	// Send tx
-	response, err := r.txClient.BroadcastTx(
+	return r.txClient.BroadcastTx(
 		ctx,
 		query,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	// If successful, attempt to poll for deliver
-	if response.TxResponse.Code == 0 {
-		pollDelay := 30 * time.Second
-		r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
-		time.Sleep(pollDelay)
+	// TODO: Disaster
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-		err = retry.Do(func() error {
-			return r.checkConfirmed(ctx, response.TxResponse.TxHash)
-		}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
+	// // If successful, attempt to poll for deliver
+	// if response.TxResponse.Code == 0 {
+	// 	pollDelay := 30 * time.Second
+	// 	r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
+	// 	time.Sleep(pollDelay)
 
-		if err != nil {
-			return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
-		} else {
-			return response, nil
-		}
+	// 	err = retry.Do(func() error {
+	// 		return r.checkConfirmed(ctx, response.TxResponse.TxHash)
+	// 	}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
+	// if err != nil {
+	// 	err = errors.Unwrap(err)
+	// }
 
-	} else {
-		return response, fmt.Errorf("error sending transaction: %s", response.TxResponse.RawLog)
-	}
+	// 	if err != nil {
+	// 		return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
+	// 	} else {
+	// 		return response, nil
+	// 	}
+
+	// } else {
+	// 	return response, fmt.Errorf("error sending transaction: %s", response.TxResponse.RawLog)
+	// }
 }
 
 // Returns nil if the transaction is in a block
-func (r *rpcClientImpl) checkConfirmed(ctx context.Context, txHash string) error {
+func (r *rpcClientImpl) CheckConfirmed(ctx context.Context, txHash string) error {
 	status, err := r.getTxStatus(ctx, txHash)
 	if err != nil {
 		r.log.Error().Err(err).Msg("Error querying tx status")
@@ -190,6 +200,9 @@ func (r *rpcClientImpl) GetAccountData(ctx context.Context, address string) (*Ac
 		accountData, err = r.getAccountData(ctx, address)
 		return err
 	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return accountData, err
 }
@@ -232,6 +245,9 @@ func (r *rpcClientImpl) SimulateTx(
 		simulationResult, err = r.simulateTx(ctx, tx, txConfig, gasFactor)
 		return err
 	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return simulationResult, err
 }
@@ -271,6 +287,9 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*au
 		grants, err = r.getGrants(ctx, botAddress)
 		return err
 	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return grants, err
 }
@@ -318,6 +337,9 @@ func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress stri
 		delegators, err = r.getDelegators(ctx, validatorAddress)
 		return err
 	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return delegators, err
 }
@@ -383,6 +405,9 @@ func retrievePaginatedData[DataType any](
 			}
 			return nil
 		}, r.delay, r.attempts, retry.Context(ctx))
+		if err != nil {
+			err = errors.Unwrap(err)
+		}
 
 		if err != nil {
 			return nil, err

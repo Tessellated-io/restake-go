@@ -1,13 +1,15 @@
+GAS
 - default gas price increase
-
 - print out what the gas fee is
-- healthchecks only on success pings or obvious failures? 
+- health is only off by one
 
-- handle ^C
-- upgrade pickaxe
-- header + credits 
+DOCS
+- header + credits  (ascii art)
+- README + branding
+- Add memo for restake go
 
+GENERAL 
 - return 1 or n errors from retry
 - min restake amount in mine
-
-- README + branding
+- enable parallelism
+- Reap panics

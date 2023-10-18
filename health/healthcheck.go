@@ -34,9 +34,11 @@ func NewHealthCheckClient(network, uuid string, log *log.Logger) *HealthCheckCli
 	}
 }
 
-func (hm *HealthCheckClient) Start(message string) bool {
-	hm.log.Info().Str("network", hm.network).Msg("🩺 Starting health")
-	return hm.ping(Start, message)
+func (hm *HealthCheckClient) Start() bool {
+	hm.log.Info().Str("network", hm.network).Msg("🏥 Starting health")
+
+	pingMessage := fmt.Sprintf("🏥 Starting health on %s", hm.network)
+	return hm.ping(Start, pingMessage)
 }
 
 func (hm *HealthCheckClient) Success(message string) bool {

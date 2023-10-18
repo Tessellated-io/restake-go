@@ -86,9 +86,8 @@ type restakeTarget struct {
 	amount    sdk.Dec
 }
 
-// TODO: Rip out unused rpc methods
 func (r *RestakeManager) Restake(ctx context.Context) error {
-	startMessage := fmt.Sprintf("✨ Starting Restake on %s", r.Network())
+	startMessage := fmt.Sprintf("♻️  Starting Restake on %s", r.Network())
 	r.log.Info().Msg(startMessage)
 
 	// Get all delegators and grants to the bot

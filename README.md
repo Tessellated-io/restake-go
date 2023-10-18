@@ -45,6 +45,8 @@ TODO: Fill this out
 - parallel execution 
 - tx inclusion polling
 - gas normalization / auto discover
+- ignores
+- auto incrementing features
 
 As well as the features you know and love
 - healthchecks

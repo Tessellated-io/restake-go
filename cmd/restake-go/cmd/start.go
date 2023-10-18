@@ -85,38 +85,25 @@ var startCmd = &cobra.Command{
 			restakeManagers = append(restakeManagers, restakeManager)
 		}
 
-		// TODO: rename sleep time hours
-		runLoopTime := time.Duration(config.SleepTimeHours) * time.Hour
+		runInterval := time.Duration(config.RunIntervalHours) * time.Hour
 		for {
-			// Wait group entered once by each network
-			// var restakeSyncGroup sync.WaitGroup
-
 			for idx, restakeManager := range restakeManagers {
-				// restakeSyncGroup.Add(1)
-
-				// go func(restakeClient *restake.RestakeManager, healthClient *health.HealthCheckClient) {
 				func(ctx context.Context, restakeManager *restake.RestakeManager, healthClient *health.HealthCheckClient) {
-					timeoutContext, cancelFunc := context.WithTimeout(ctx, runLoopTime)
+					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
 					defer cancelFunc()
 
-					// defer restakeSyncGroup.Done()
-
-					// TODO: better message
-					healthClient.Start("start")
+					healthClient.Start()
 					err := restakeManager.Restake(timeoutContext)
 					if err != nil {
-						healthClient.Failed(err.Error())
+						healthClient.Failed(err)
 					} else {
 						healthClient.Success("Hooray!")
 					}
 				}(ctx, restakeManager, healthClients[idx])
 			}
 
-			// // Wait for all networks to finish
-			// restakeSyncGroup.Wait()
-
-			log.Info().Int("sleep hours", config.SleepTimeHours).Msg("Finished restaking. Sleeping until next round")
-			time.Sleep(time.Duration(config.SleepTimeHours) * time.Hour)
+			log.Info().Dur("next run in hours", runInterval).Msg("Finished restaking. Sleeping until next round")
+			time.Sleep(runInterval)
 		}
 	},
 }
