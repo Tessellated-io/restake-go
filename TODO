@@ -20,3 +20,5 @@ GENERAL
 
 - fix package in go.mod
 - move towards debug log statements
+
+- print final status at end

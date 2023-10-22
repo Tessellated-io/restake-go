@@ -82,7 +82,8 @@ func (s *Signer) SendMessages(
 	for i := 0; i < 5; i++ {
 		// Attempt to broadcast
 		var result *txtypes.BroadcastTxResponse
-		result, err = s.sendMessages(ctx, msgs)
+		var gasWanted uint64
+		result, gasWanted, err = s.sendMessages(ctx, msgs)
 
 		// Compose for logging
 		gasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
@@ -143,21 +144,23 @@ func (s *Signer) SendMessages(
 			}
 		} else if code == 13 {
 			// Code 13 indicates too little gas
-			// TODO: Clean up once we know evmos is good.
-			// maybeNewMinFee, err := s.extractMinGlobalFee(logs)
-			// if err == nil {
-			// 	s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
-			// 	s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
-			// 	continue
-			// } else {
-			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
-			s.gasPrice += feeIncrement
+
+			// First, figure out if the network told us the minimum fee
+			maybeNewMinFee, err := s.extractMinGlobalFee(logs)
+			if err == nil {
+				s.gasPrice += feeIncrement
+				s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
+				s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
+				continue
+			} else {
+				// Otherwise, use normal increment logic.
+				s.gasPrice += feeIncrement
+				newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
+				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
+			}
 
 			// Failing for gas seems silly, so let's go ahead and retry.
 			i--
-
-			continue
-			// }
 		} else if code != 0 {
 			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
 			time.Sleep(5 * time.Second)
@@ -186,13 +189,13 @@ func (s *Signer) SendMessages(
 func (s *Signer) sendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
-) (*txtypes.BroadcastTxResponse, error) {
+) (*txtypes.BroadcastTxResponse, uint64, error) {
 	// Get account data
 	address := s.bytesSigner.GetAddress(s.addressPrefix)
 	accountData, err := s.rpcClient.GetAccountData(ctx, address)
 	if err != nil {
 		s.log.Error().Err(err).Str("signer address", s.bytesSigner.GetAddress(s.addressPrefix)).Msg("Error getting account data")
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Start building a tx
@@ -200,7 +203,7 @@ func (s *Signer) sendMessages(
 	factory := cosmostx.Factory{}.WithChainID(s.chainID).WithTxConfig(txConfig)
 	txb, err := factory.BuildUnsignedTx(msgs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	txb.SetMemo(s.memo)
@@ -215,13 +218,13 @@ func (s *Signer) sendMessages(
 	}
 	err = txb.SetSignatures(signatureProto)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Simulate the tx
 	simulationResult, err := s.rpcClient.SimulateTx(ctx, txb.GetTx(), txConfig, s.gasFactor)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	txb.SetGasLimit(simulationResult.GasRecommendation)
 
@@ -239,7 +242,8 @@ func (s *Signer) sendMessages(
 		panic(err)
 	}
 
-	return s.rpcClient.Broadcast(ctx, signedTx)
+	response, err := s.rpcClient.Broadcast(ctx, signedTx)
+	return response, simulationResult.GasRecommendation, err
 }
 
 func (s *Signer) signTx(
@@ -287,7 +291,6 @@ func (s *Signer) signTx(
 	return encoder(txb.GetTx())
 }
 
-// TODO: Consider cleaning up
 // extractMinGlobalFee is useful for evmos, or other EVMs in the Tendermint space
 func (s *Signer) extractMinGlobalFee(errMsg string) (int, error) {
 	pattern := `provided fee < minimum global fee \((\d+)aevmos < (\d+)aevmos\). Please increase the gas price.: insufficient fee`
