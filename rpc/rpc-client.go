@@ -12,7 +12,7 @@ import (
 
 // Handles RPCs for Restake
 type RpcClient interface {
-	BroadcastTxAndWait(ctx context.Context, txBytes []byte) (*txtypes.BroadcastTxResponse, error)
+	Broadcast(ctx context.Context, txBytes []byte) (*txtypes.BroadcastTxResponse, error)
 	CheckConfirmed(ctx context.Context, txHash string) error
 
 	SimulateTx(ctx context.Context, tx authsigning.Tx, txConfig client.TxConfig, gasFactor float64) (*SimulationResult, error)

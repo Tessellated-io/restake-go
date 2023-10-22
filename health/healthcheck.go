@@ -34,25 +34,25 @@ func NewHealthCheckClient(network, uuid string, log *log.Logger) *HealthCheckCli
 	}
 }
 
-func (hm *HealthCheckClient) Start() bool {
+func (hm *HealthCheckClient) Start() error {
 	hm.log.Info().Str("network", hm.network).Msg("🏥 Starting health")
 
 	pingMessage := fmt.Sprintf("🏥 Starting health on %s", hm.network)
 	return hm.ping(Start, pingMessage)
 }
 
-func (hm *HealthCheckClient) Success(message string) bool {
+func (hm *HealthCheckClient) Success(message string) error {
 	hm.log.Info().Str("network", hm.network).Msg("❤️  Health success")
 	return hm.ping(Success, message)
 }
 
-func (hm *HealthCheckClient) Failed(err error) bool {
-	hm.log.Error().Err(err).Str("network", hm.network).Msg("❤️‍🩹  Health failed")
+func (hm *HealthCheckClient) Failed(err error) error {
+	hm.log.Error().Err(err).Str("network", hm.network).Msg("\u200d  Health failed")
 
 	return hm.ping(Fail, err.Error())
 }
 
-func (hm *HealthCheckClient) ping(ptype PingType, message string) bool {
+func (hm *HealthCheckClient) ping(ptype PingType, message string) error {
 	url := fmt.Sprintf("https://hc-ping.com/%s", hm.uuid)
 	if ptype == Fail || ptype == Start {
 		url = fmt.Sprintf("https://hc-ping.com/%s/%s", hm.uuid, ptype)
@@ -64,19 +64,22 @@ func (hm *HealthCheckClient) ping(ptype PingType, message string) bool {
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		panic(fmt.Errorf("failed to marshal JSON data: %s", err))
+		hm.log.Error().Err(err).Msg("failed to marshal JSON data")
+		return err
 	}
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		panic(fmt.Errorf("failed to post data: %s", err))
+		hm.log.Error().Err(err).Msg("failed to post data")
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
-		return true
+		return nil
 	} else {
-		hm.log.Error().Str("network", hm.network).Str("ping type", string(ptype)).Int("response code", resp.StatusCode).Msg("\u200d Health failed")
-		return false
+		err := fmt.Errorf("non-200 response code from health: %d", resp.StatusCode)
+		hm.log.Error().Err(err).Str("network", hm.network).Str("ping type", string(ptype)).Int("response code", resp.StatusCode).Msg("\u200d Health failed")
+		return err
 	}
 }

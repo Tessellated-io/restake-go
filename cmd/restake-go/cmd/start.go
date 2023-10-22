@@ -88,16 +88,16 @@ var startCmd = &cobra.Command{
 		runInterval := time.Duration(config.RunIntervalHours) * time.Hour
 		for {
 			for idx, restakeManager := range restakeManagers {
-				func(ctx context.Context, restakeManager *restake.RestakeManager, healthClient *health.HealthCheckClient) {
+				go func(ctx context.Context, restakeManager *restake.RestakeManager, healthClient *health.HealthCheckClient) {
 					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
 					defer cancelFunc()
 
-					healthClient.Start()
+					_ = healthClient.Start()
 					err := restakeManager.Restake(timeoutContext)
 					if err != nil {
-						healthClient.Failed(err)
+						_ = healthClient.Failed(err)
 					} else {
-						healthClient.Success("Hooray!")
+						_ = healthClient.Success("Hooray!")
 					}
 				}(ctx, restakeManager, healthClients[idx])
 			}
@@ -122,7 +122,7 @@ func expandHomeDir(path string) string {
 
 	usr, err := user.Current()
 	if err != nil {
-		panic(fmt.Errorf("Failed to get user's home directory: %v", err))
+		panic(fmt.Errorf("failed to get user's home directory: %v", err))
 	}
 	return strings.Replace(path, "~", usr.HomeDir, 1)
 }

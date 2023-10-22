@@ -2,13 +2,11 @@ package signer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"time"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/rpc"
@@ -62,8 +60,7 @@ func NewSigner(
 
 		feeDenom:  feeDenom,
 		gasFactor: gasFactor,
-		// TODO
-		gasPrice: 0, // gasPrice,
+		gasPrice:  gasPrice,
 
 		chainID:       chainID,
 		addressPrefix: addressPrefix,
@@ -85,21 +82,16 @@ func (s *Signer) SendMessages(
 	for i := 0; i < 5; i++ {
 		// Attempt to broadcast
 		var result *txtypes.BroadcastTxResponse
-		var gasWanted uint64
-		result, gasWanted, err = s.sendMessages(ctx, msgs)
+		result, err = s.sendMessages(ctx, msgs)
+
+		// Compose for logging
+		gasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
 
 		// Give up if we get an error attempting to broadcast.
 		if err != nil {
-			s.log.Error().Err(err).Msg("Error broadcasting transaction")
+			s.log.Error().Err(err).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Error broadcasting transaction")
 			continue
 		}
-
-		// TODO: remove
-		fmt.Println("\nResults:")
-		fmt.Println(result)
-		fmt.Println(gasWanted)
-		fmt.Println(err)
-		fmt.Println("\nEND RESULTS")
 
 		// Extract codes
 		code := result.TxResponse.Code
@@ -109,29 +101,45 @@ func (s *Signer) SendMessages(
 			// Code 0 indicates a successful broadcast.
 			txHash := result.TxResponse.TxHash
 
+			// Wait for the transaction to hit the chain.
 			pollDelay := 30 * time.Second
-			s.log.Info().Str("tx hash", txHash).Msg("Transaction sent, waiting for inclusion...")
+			s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction sent, waiting for inclusion...")
 			time.Sleep(pollDelay)
 
-			err = retry.Do(func() error {
-				return s.rpcClient.CheckConfirmed(ctx, txHash)
-			}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
-			if err != nil {
-				err = errors.Unwrap(err)
+			// 1. Try to get a confirmation on the first try. If not, increass the gas.
+			// Check that it confirmed.
+			// If it failed, that likely means we should use more gas.
+			// TODO: extract the gas failure function
+			err := s.rpcClient.CheckConfirmed(ctx, txHash)
+			if err == nil {
+				// Hurrah, things worked out!
+				s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+				return nil
 			}
 
-			// If we successfully broadcasted but we are not confirmed, that likely means we need more gas
-			if err != nil {
-				s.log.Info().Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
-				s.gasPrice += feeIncrement
+			// 2a. If the tx broadcast did not error, but it hasn't landed, then we can likely affor more in gas.
+			s.gasPrice += feeIncrement
+			newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
+			s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
 
-				// Failing for gas seems silly, so let's go ahead and retry.
-				i--
+			// Failing for gas seems silly, so let's go ahead and retry.
+			i--
 
-				continue
-			} else {
-				// Hurrah, things worked out!
-				return nil
+			// 3. Eventually it might show up though, so to prevent nonce conflicts go ahead and search
+			maxPollAttempts := 10
+			for j := 0; j < maxPollAttempts; j++ {
+				// Sleep and wait
+				time.Sleep(pollDelay)
+				s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Int("attempt", j).Int("max_attempts", maxPollAttempts).Msg("still waiting for tx to land")
+
+				// Re-poll
+				err = s.rpcClient.CheckConfirmed(ctx, txHash)
+				if err == nil {
+					// TODO: Dedupe with above
+					// Hurrah, things worked out!
+					s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+					return nil
+				}
 			}
 		} else if code == 13 {
 			// Code 13 indicates too little gas
@@ -142,7 +150,7 @@ func (s *Signer) SendMessages(
 			// 	s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
 			// 	continue
 			// } else {
-			s.log.Info().Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
+			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Need more gas, increasing gas price. Code: %d, Logs: %s", code, logs))
 			s.gasPrice += feeIncrement
 
 			// Failing for gas seems silly, so let's go ahead and retry.
@@ -151,12 +159,15 @@ func (s *Signer) SendMessages(
 			continue
 			// }
 		} else if code != 0 {
-			s.log.Info().Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
-			// TODO: remove if converting to retry
+			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
 			time.Sleep(5 * time.Second)
 			continue
 		}
 	}
+
+	// Log that we're giving up and what price we gave up at.
+	gasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
+	s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("failed in all attempts to broadcast transaction")
 
 	if err != nil {
 		// All tries exhausted, give up and return an error.
@@ -165,10 +176,8 @@ func (s *Signer) SendMessages(
 		// Broadcasted but could not confirm
 		return fmt.Errorf("tx broadcasted but was never confirmed. need higher gas prices?")
 	}
-
 }
 
-// TODO: Need gas required?
 // Try to broadcast a transaction containing the given messages.
 // Returns:
 // - a broadcast tx response if it was broadcasted successfully
@@ -177,13 +186,13 @@ func (s *Signer) SendMessages(
 func (s *Signer) sendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
-) (*txtypes.BroadcastTxResponse, uint64, error) {
+) (*txtypes.BroadcastTxResponse, error) {
 	// Get account data
 	address := s.bytesSigner.GetAddress(s.addressPrefix)
 	accountData, err := s.rpcClient.GetAccountData(ctx, address)
 	if err != nil {
 		s.log.Error().Err(err).Str("signer address", s.bytesSigner.GetAddress(s.addressPrefix)).Msg("Error getting account data")
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Start building a tx
@@ -191,7 +200,7 @@ func (s *Signer) sendMessages(
 	factory := cosmostx.Factory{}.WithChainID(s.chainID).WithTxConfig(txConfig)
 	txb, err := factory.BuildUnsignedTx(msgs...)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	txb.SetMemo(s.memo)
@@ -206,13 +215,13 @@ func (s *Signer) sendMessages(
 	}
 	err = txb.SetSignatures(signatureProto)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Simulate the tx
 	simulationResult, err := s.rpcClient.SimulateTx(ctx, txb.GetTx(), txConfig, s.gasFactor)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	txb.SetGasLimit(simulationResult.GasRecommendation)
 
@@ -230,8 +239,7 @@ func (s *Signer) sendMessages(
 		panic(err)
 	}
 
-	result, err := s.rpcClient.BroadcastTxAndWait(ctx, signedTx)
-	return result, simulationResult.GasRecommendation, err
+	return s.rpcClient.Broadcast(ctx, signedTx)
 }
 
 func (s *Signer) signTx(

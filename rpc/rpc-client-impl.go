@@ -100,6 +100,8 @@ func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, valida
 
 // private function with retries
 func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) (sdk.Dec, error) {
+	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("searching for pending rewards")
+
 	request := &distributiontypes.QueryDelegationTotalRewardsRequest{
 		DelegatorAddress: delegator,
 	}
@@ -110,21 +112,29 @@ func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, valida
 	}
 
 	for _, reward := range response.Rewards {
+		r.log.Info().Str("delegator", delegator).Str("examining_validator", reward.ValidatorAddress).Msg("searching for target denom")
 		if strings.EqualFold(validator, reward.ValidatorAddress) {
+			r.log.Info().Str("delegator", delegator).Msg("found validator")
+
 			for _, coin := range reward.Reward {
+				r.log.Info().Str("target", delegator).Str("examining_denom", coin.Denom).Str("staking_denom", stakingDenom).Msg("examinging reward denom")
+
 				if strings.EqualFold(coin.Denom, stakingDenom) {
+					r.log.Info().Str("target", delegator).Msg("found denom")
 					return coin.Amount, nil
 				}
+				r.log.Info().Str("target", delegator).Msg("incorrect denom")
+
 			}
 		}
 	}
 
-	return sdk.NewDec(0), fmt.Errorf("unable to find staking reward denom %s", stakingDenom)
+	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("unable to find any rewards attributable to validator")
+	return sdk.NewDec(0), nil
 }
 
-// TODO: rename
-// BroadcastTxResponse may or may not be populated in the response.
-func (r *rpcClientImpl) BroadcastTxAndWait(
+// Broadcast may or may not be populated in the response.
+func (r *rpcClientImpl) Broadcast(
 	ctx context.Context,
 	txBytes []byte,
 ) (*txtypes.BroadcastTxResponse, error) {
@@ -139,34 +149,6 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 		ctx,
 		query,
 	)
-
-	// TODO: Disaster
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// // If successful, attempt to poll for deliver
-	// if response.TxResponse.Code == 0 {
-	// 	pollDelay := 30 * time.Second
-	// 	r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
-	// 	time.Sleep(pollDelay)
-
-	// 	err = retry.Do(func() error {
-	// 		return r.checkConfirmed(ctx, response.TxResponse.TxHash)
-	// 	}, retry.Delay(pollDelay), retry.Attempts(10), retry.Context(ctx))
-	// if err != nil {
-	// 	err = errors.Unwrap(err)
-	// }
-
-	// 	if err != nil {
-	// 		return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
-	// 	} else {
-	// 		return response, nil
-	// 	}
-
-	// } else {
-	// 	return response, fmt.Errorf("error sending transaction: %s", response.TxResponse.RawLog)
-	// }
 }
 
 // Returns nil if the transaction is in a block
