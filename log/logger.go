@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// TODO: Move to pickaxe
+
 // This package implements a hierarchical logger which allows adding prefixes.
 
 type Logger struct {

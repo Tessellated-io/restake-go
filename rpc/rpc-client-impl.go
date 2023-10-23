@@ -160,7 +160,7 @@ func (r *rpcClientImpl) CheckConfirmed(ctx context.Context, txHash string) error
 	} else {
 		height := status.TxResponse.Height
 		if height != 0 {
-			r.log.Info().Err(err).Str("tx hash", txHash).Int64("height", height).Msg("Transaction confirmed")
+			r.log.Info().Err(err).Str("tx_hash", txHash).Int64("height", height).Msg("Transaction confirmed")
 			return nil
 		} else {
 			r.log.Warn().Msg("Transaction still not confirmed, still waiting...")

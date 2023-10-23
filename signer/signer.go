@@ -75,7 +75,7 @@ func NewSigner(
 func (s *Signer) SendMessages(
 	ctx context.Context,
 	msgs []sdk.Msg,
-) error {
+) (string, error) {
 	var err error
 
 	// Attempt to send a transaction a few times.
@@ -104,7 +104,7 @@ func (s *Signer) SendMessages(
 
 			// Wait for the transaction to hit the chain.
 			pollDelay := 30 * time.Second
-			s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction sent, waiting for inclusion...")
+			s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction sent, waiting for inclusion...")
 			time.Sleep(pollDelay)
 
 			// 1. Try to get a confirmation on the first try. If not, increass the gas.
@@ -114,8 +114,8 @@ func (s *Signer) SendMessages(
 			err := s.rpcClient.CheckConfirmed(ctx, txHash)
 			if err == nil {
 				// Hurrah, things worked out!
-				s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
-				return nil
+				s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+				return txHash, nil
 			}
 
 			// 2a. If the tx broadcast did not error, but it hasn't landed, then we can likely affor more in gas.
@@ -131,15 +131,15 @@ func (s *Signer) SendMessages(
 			for j := 0; j < maxPollAttempts; j++ {
 				// Sleep and wait
 				time.Sleep(pollDelay)
-				s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Int("attempt", j).Int("max_attempts", maxPollAttempts).Msg("still waiting for tx to land")
+				s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Int("attempt", j).Int("max_attempts", maxPollAttempts).Msg("still waiting for tx to land")
 
 				// Re-poll
 				err = s.rpcClient.CheckConfirmed(ctx, txHash)
 				if err == nil {
 					// TODO: Dedupe with above
 					// Hurrah, things worked out!
-					s.log.Info().Str("tx hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
-					return nil
+					s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+					return txHash, nil
 				}
 			}
 		} else if code == 13 {
@@ -149,14 +149,15 @@ func (s *Signer) SendMessages(
 			maybeNewMinFee, err := s.extractMinGlobalFee(logs)
 			if err == nil {
 				s.gasPrice += feeIncrement
-				s.log.Info().Msg("Adjusting gas price due to Evmos/EVM error")
 				s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
+				newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
+				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg("Adjusting gas price due to a minimum global fee error")
 				continue
 			} else {
 				// Otherwise, use normal increment logic.
 				s.gasPrice += feeIncrement
 				newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
-				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
+				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction failed to broadcast with gas error. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
 			}
 
 			// Failing for gas seems silly, so let's go ahead and retry.
@@ -174,10 +175,10 @@ func (s *Signer) SendMessages(
 
 	if err != nil {
 		// All tries exhausted, give up and return an error.
-		return fmt.Errorf("error broadcasting tx: %s", err.Error())
+		return "", fmt.Errorf("error broadcasting tx: %s", err.Error())
 	} else {
 		// Broadcasted but could not confirm
-		return fmt.Errorf("tx broadcasted but was never confirmed. need higher gas prices?")
+		return "", fmt.Errorf("tx broadcasted but was never confirmed. need higher gas prices?")
 	}
 }
 
@@ -293,18 +294,19 @@ func (s *Signer) signTx(
 
 // extractMinGlobalFee is useful for evmos, or other EVMs in the Tendermint space
 func (s *Signer) extractMinGlobalFee(errMsg string) (int, error) {
-	pattern := `provided fee < minimum global fee \((\d+)aevmos < (\d+)aevmos\). Please increase the gas price.: insufficient fee`
+	// Regular expression to match the desired number
+	pattern := `(\d+)\w+\)\. Please increase`
 	re := regexp.MustCompile(pattern)
 
 	matches := re.FindStringSubmatch(errMsg)
-	if len(matches) == 0 && len(matches) > 2 {
-		converted, err := strconv.Atoi(matches[2])
+	if len(matches) > 1 {
+		converted, err := strconv.Atoi(matches[1])
 		if err != nil {
-			s.log.Error().Err(err).Msg("Found a matching eth / evmos error, but failed to atoi it")
+			s.log.Error().Err(err).Msg("Found a matching min global fee error, but failed to atoi it")
 			return 0, nil
 		}
 		return converted, nil
-	}
 
+	}
 	return 0, fmt.Errorf("unrecognized error format")
 }

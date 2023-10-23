@@ -86,18 +86,21 @@ type restakeTarget struct {
 	amount    sdk.Dec
 }
 
-func (r *RestakeManager) Restake(ctx context.Context) error {
+func (r *RestakeManager) Restake(ctx context.Context) (txHash string, err error) {
 	startMessage := fmt.Sprintf("♻️  Starting Restake on %s", r.Network())
 	r.log.Info().Msg(startMessage)
 
 	// Get all delegators and grants to the bot
 	allGrants, err := r.rpcClient.GetGrants(ctx, r.botAddress)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	validGrants := arrays.Filter(allGrants, isValidGrant)
 	r.log.Info().Int("valid grants", len(validGrants)).Msg("Found valid grants")
+	if len(validGrants) == 0 {
+		return "", fmt.Errorf("no valid grants found")
+	}
 
 	// Map to balances and then filter by rewards
 	validDelegators := arrays.Map(validGrants, func(input *authztypes.GrantAuthorization) string { return input.Granter })
@@ -106,7 +109,7 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 		// Fetch total rewards
 		totalRewards, err := r.rpcClient.GetPendingRewards(ctx, validDelegator, r.validatorAddress, r.stakingToken)
 		if err != nil {
-			return err
+			return "", err
 		}
 		r.log.Info().Str("delegator", validDelegator).Str("total rewards", totalRewards.String()).Str("staking token", r.stakingToken).Msg("Fetched delegation rewards")
 
@@ -119,17 +122,17 @@ func (r *RestakeManager) Restake(ctx context.Context) error {
 	targetsAboveMinimum := arrays.Filter(restakeTargets, func(input *restakeTarget) bool {
 		return input.amount.GTE(r.minRewards)
 	})
-	r.log.Info().Int("valid grants", len(targetsAboveMinimum)).Msg("fetched grants above minimum")
+	r.log.Info().Int("grants_above_min", len(targetsAboveMinimum)).Str("minimum", r.minRewards.String()).Msg("fetched grants above minimum")
 
 	// Restake all delegators
 	if len(targetsAboveMinimum) > 0 {
 		return r.restakeDelegators(ctx, targetsAboveMinimum)
 	}
 
-	return fmt.Errorf("no valid grants found")
+	return "", fmt.Errorf("no grants above minimum found")
 }
 
-func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*restakeTarget) error {
+func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*restakeTarget) (txHash string, err error) {
 	delegateMsgs := []sdk.Msg{}
 	for _, target := range targets {
 		// Form our messages

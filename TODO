@@ -1,6 +1,4 @@
 GAS
-- default gas price increase
-- print out what the gas fee is
 - health is only off by one
 
 DOCS
@@ -9,16 +7,11 @@ DOCS
 - Add memo for restake go
 
 GENERAL 
-- return 1 or n errors from retry
 - min restake amount in mine
-- enable parallelism
 - Reap panics
 - configure restake time
 - Fix default config parsing
-- Rip out sleep
 - healthchecks only on success pings or obvious failures? 
 
-- fix package in go.mod
 - move towards debug log statements
 
-- print final status at end

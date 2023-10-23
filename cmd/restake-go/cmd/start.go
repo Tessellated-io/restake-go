@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"os/user"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	os2 "github.com/cometbft/cometbft/libs/os"
@@ -24,6 +26,18 @@ var (
 	configFile    string
 	gasMultiplier float64
 )
+
+type RestakeResult struct {
+	network string
+	txHash  string
+	err     error
+}
+
+type RestakeResults []*RestakeResult
+
+func (rr RestakeResults) Len() int           { return len(rr) }
+func (rr RestakeResults) Swap(i, j int)      { rr[i], rr[j] = rr[j], rr[i] }
+func (rr RestakeResults) Less(i, j int) bool { return rr[i].network < rr[j].network }
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
@@ -87,20 +101,40 @@ var startCmd = &cobra.Command{
 
 		runInterval := time.Duration(config.RunIntervalHours) * time.Hour
 		for {
+			var wg sync.WaitGroup
+			var results RestakeResults = []*RestakeResult{}
+
 			for idx, restakeManager := range restakeManagers {
+				wg.Add(1)
+
 				go func(ctx context.Context, restakeManager *restake.RestakeManager, healthClient *health.HealthCheckClient) {
+					defer wg.Done()
+
 					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
 					defer cancelFunc()
 
 					_ = healthClient.Start()
-					err := restakeManager.Restake(timeoutContext)
+					txHash, err := restakeManager.Restake(timeoutContext)
 					if err != nil {
 						_ = healthClient.Failed(err)
 					} else {
 						_ = healthClient.Success("Hooray!")
 					}
+
+					result := &RestakeResult{
+						network: restakeManager.Network(),
+						txHash:  txHash,
+						err:     err,
+					}
+					results = append(results, result)
 				}(ctx, restakeManager, healthClients[idx])
 			}
+
+			// Print results whenever they all finish
+			go func() {
+				wg.Wait()
+				printResults(results, log)
+			}()
 
 			log.Info().Dur("next run in hours", runInterval).Msg("Finished restaking. Sleeping until next round")
 			time.Sleep(runInterval)
@@ -115,6 +149,7 @@ func init() {
 	startCmd.Flags().Float64VarP(&gasMultiplier, "gas-multiplier", "g", 1.2, "The multiplier to use for gas")
 }
 
+// TODO: Move to pickaxe here
 func expandHomeDir(path string) string {
 	if !strings.HasPrefix(path, "~") {
 		return path
@@ -125,4 +160,17 @@ func expandHomeDir(path string) string {
 		panic(fmt.Errorf("failed to get user's home directory: %v", err))
 	}
 	return strings.Replace(path, "~", usr.HomeDir, 1)
+}
+
+func printResults(results RestakeResults, log *log.Logger) {
+	sort.Sort(results)
+
+	log.Info().Msg("Restake Results:")
+	for _, result := range results {
+		if result.err == nil {
+			log.Info().Str("tx_hash", result.txHash).Msg(fmt.Sprintf("✅ %s: Success", result.network))
+		} else {
+			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
+		}
+	}
 }
