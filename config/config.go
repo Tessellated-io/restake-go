@@ -9,6 +9,7 @@ import (
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/registry"
+	"github.com/tessellated-io/router/router"
 )
 
 type RestakeConfig struct {
@@ -47,6 +48,10 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	})
 
 	// Loop through each restake chain, resolving the data
+	chainRouter, err := router.NewRouter(nil)
+	if err != nil {
+		return nil, err
+	}
 	configs := []*ChainConfig{}
 	for _, restakeChain := range filtered {
 		// Extract the relevant file config
@@ -57,6 +62,16 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 
 		// Fetch chain info
 		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeChain.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a chain object for the router
+		chain, err := router.NewChain(restakeChain.Name, registryChainInfo.ChainID, &fileChainInfo.Grpc)
+		if err != nil {
+			return nil, err
+		}
+		err = chainRouter.AddChain(chain)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +90,7 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 			panic(fmt.Errorf("found too many staking tokens in chain registry for %s", restakeChain.Name))
 		}
 
-		config := newChainConfig(
+		config, err := newChainConfig(
 			restakeChain.Name,
 			fileChainInfo.HealthCheckID,
 			restakeChain.Address,
@@ -85,9 +100,12 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 			registryChainInfo.Bech32Prefix,
 			registryChainInfo.ChainID,
 			registryChainInfo.Slip44,
-			fileChainInfo.Grpc,
 			feeToken.FixedMinGasPrice,
+			chainRouter,
 		)
+		if err != nil {
+			return nil, err
+		}
 		configs = append(configs, config)
 	}
 
@@ -118,9 +136,14 @@ func newChainConfig(
 	addressPrefix string,
 	chainID string,
 	coinType int,
-	grpc string,
 	gasPrice float64,
-) *ChainConfig {
+	router router.Router,
+) (*ChainConfig, error) {
+	grpc, err := router.GetGrpcEndpoint(chainID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ChainConfig{
 		network:            network,
 		HealthcheckId:      healthcheckId,
@@ -133,7 +156,7 @@ func newChainConfig(
 		CoinType:           coinType,
 		nodeGrpcURI:        grpc,
 		GasPrice:           gasPrice,
-	}
+	}, nil
 }
 
 func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.FeeToken, error) {
