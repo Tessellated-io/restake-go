@@ -18,21 +18,6 @@ type RestakeConfig struct {
 	Chains           []*ChainConfig
 }
 
-type ChainConfig struct {
-	Network            string
-	HealthcheckId      string
-	ValidatorAddress   string
-	FeeDenom           string
-	ExpectedBotAddress string
-	MinRestakeAmount   *big.Int
-	AddressPrefix      string
-	ChainId            string
-	NodeGrpcURI        string
-	GasPrice           float64
-
-	CoinType int
-}
-
 func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*RestakeConfig, error) {
 	// Get data from the file
 	fileConfig, err := parseConfig(filename)
@@ -131,22 +116,22 @@ func newChainConfig(
 	expectedBotAddress string,
 	minRestakeAmount int,
 	addressPrefix string,
-	chainId string,
+	chainID string,
 	coinType int,
 	grpc string,
 	gasPrice float64,
 ) *ChainConfig {
 	return &ChainConfig{
-		Network:            network,
+		network:            network,
 		HealthcheckId:      healthcheckId,
 		ValidatorAddress:   validatorAddress,
 		FeeDenom:           feeDenom,
 		ExpectedBotAddress: expectedBotAddress,
 		MinRestakeAmount:   big.NewInt(int64(minRestakeAmount)),
 		AddressPrefix:      addressPrefix,
-		ChainId:            chainId,
+		chainID:            chainID,
 		CoinType:           coinType,
-		NodeGrpcURI:        grpc,
+		nodeGrpcURI:        grpc,
 		GasPrice:           gasPrice,
 	}
 }

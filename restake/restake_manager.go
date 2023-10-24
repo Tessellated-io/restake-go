@@ -50,7 +50,7 @@ func NewRestakeManager(
 	signer := signer.NewSigner(
 		gasFactor,
 		cdc,
-		config.ChainId,
+		config.ChainID(),
 		keyPair,
 		config.GasPrice,
 		config.AddressPrefix,
@@ -69,7 +69,7 @@ func NewRestakeManager(
 		rpcClient:        rpcClient,
 		validatorAddress: config.ValidatorAddress,
 		botAddress:       config.ExpectedBotAddress,
-		network:          config.Network,
+		network:          config.Network(),
 
 		stakingToken: config.FeeDenom,
 		minRewards:   sdk.NewDec(config.MinRestakeAmount.Int64()),

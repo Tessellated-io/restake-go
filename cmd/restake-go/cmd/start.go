@@ -80,7 +80,7 @@ var startCmd = &cobra.Command{
 		for _, chain := range config.Chains {
 			prefixedLogger := log.ApplyPrefix(fmt.Sprintf(" [%s]", chain.Network))
 
-			rpcClient, err := rpc.NewRpcClient(chain.NodeGrpcURI, cdc, prefixedLogger)
+			rpcClient, err := rpc.NewRpcClient(chain.ChainGrpcURI(), cdc, prefixedLogger)
 			if err != nil {
 				panic(err)
 			}
@@ -89,7 +89,7 @@ var startCmd = &cobra.Command{
 			if healthcheckId == "" {
 				panic(fmt.Sprintf("No health check id found for network %s", chain.Network))
 			}
-			healthClient := health.NewHealthCheckClient(chain.Network, healthcheckId, prefixedLogger)
+			healthClient := health.NewHealthCheckClient(chain.Network(), healthcheckId, prefixedLogger)
 			healthClients = append(healthClients, healthClient)
 
 			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, gasMultiplier, *chain, prefixedLogger)
