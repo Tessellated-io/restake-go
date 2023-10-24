@@ -2,53 +2,33 @@
 
 DOCKER := $(shell which docker)
 
-CURRENT_DIR = $(shell pwd)
 BUILDDIR ?= $(CURDIR)/build
 
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+COMMIT := $(shell git log -1 --format='%H')
+
+DIRTY := -dirty
+ifeq (,$(shell git status --porcelain))
+	DIRTY := 
+endif
+
+VERSION := $(shell git describe --tags --exact-match 2>/dev/null)
+# if VERSION is empty, then populate it with branch's name and raw commit hash
+ifeq (,$(VERSION))
+  VERSION := $(BRANCH)-$(COMMIT)
+endif
+
+VERSION := $(VERSION)$(DIRTY)
+
+GIT_REVISION := $(shell git rev-parse HEAD)$(DIRTY)
+
+GO_SYSTEM_VERSION = $(shell go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f1-2)
+
+ldflags= -X  github.com/tessellated-io/restake-go/cmd/restake-go/cmd.RestakeVersion=${VERSION} \
+	-X  github.com/tessellated-io/restake-go/cmd/restake-go/cmd.GitRevision=${GIT_REVISION} \
+	-X github.com/tessellated-io/restake-go/cmd/restake-go/cmd.GoVersion=${GO_SYSTEM_VERSION}
+
 BUILD_FLAGS := -tags "$(build_tags)" -ldflags '$(ldflags)'
-# check for nostrip option
-ifeq (,$(findstring nostrip,$(COSMOS_BUILD_OPTIONS)))
-  BUILD_FLAGS += -trimpath
-endif
-
-# Check for debug option
-ifeq (debug,$(findstring debug,$(COSMOS_BUILD_OPTIONS)))
-  BUILD_FLAGS += -gcflags "all=-N -l"
-endif
-
-###############################################################################
-###                                Protobuf                                 ###
-###############################################################################
-
-protoImageName=proto-genc
-protoImage=$(DOCKER) run --rm -v $(CURDIR):/workspace --workdir /workspace/proto $(protoImageName)
-
-proto-all: proto-build-docker proto-format proto-lint make proto-format proto-update-deps proto-gen
-
-proto-build-docker:
-	@echo "Building Docker Container '$(protoImageName)' for Protobuf Compilation"
-	@docker build -t $(protoImageName) -f ./proto/Dockerfile .
-
-proto-gen:
-	@echo "Generating Protobuf Files"
-	@$(protoImage) sh -c "cd .. && sh ./scripts/protocgen.sh" 
-
-proto-format:
-	@echo "Formatting Protobuf Files with Clang"
-	@$(protoImage) find ./ -name "*.proto" -exec clang-format -i {} \;
-
-proto-lint:
-	@echo "Linting Protobuf Files With Buf"
-	@$(protoImage) buf lint 
-
-proto-check-breaking:
-	@$(protoImage) buf breaking --against $(HTTPS_GIT)#branch=main
-
-proto-update-deps:
-	@echo "Updating Protobuf dependencies"	
-	@$(protoImage) buf mod update
-
-.PHONY: proto-all proto-gen proto-format proto-lint proto-check-breaking proto-update-deps
 
 ###############################################################################
 ###                                  Build                                  ###
@@ -56,19 +36,17 @@ proto-update-deps:
 
 BUILD_TARGETS := build
 
-build: BUILD_ARGS=
+build:
+	mkdir -p $(BUILDDIR)/
+	go build -mod=readonly -ldflags '$(ldflags)' -trimpath -o $(BUILDDIR) ./...;
 
-build-linux-amd64:
-	@GOOS=linux GOARCH=amd64 LEDGER_ENABLED=false $(MAKE) build
+install: go.sum
+	go install $(BUILD_FLAGS) ./cmd/restake-go
 
-build-linux-arm64:
-	@GOOS=linux GOARCH=arm64 LEDGER_ENABLED=false $(MAKE) build
+clean:
+	rm -rf $(BUILDDIR)/*
 
-$(BUILD_TARGETS): go.sum $(BUILDDIR)/
-	@cd ${CURRENT_DIR} && go $@ -mod=readonly $(BUILD_FLAGS) $(BUILD_ARGS) ./...
-
-$(BUILDDIR)/:
-	@mkdir -p $(BUILDDIR)/
+.PHONY: build
 
 ###############################################################################
 ###                          Tools & Dependencies                           ###

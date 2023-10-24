@@ -2,15 +2,16 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
-	"github.com/restake-go/log"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
+	"github.com/tessellated-io/restake-go/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -89,13 +90,18 @@ func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, valida
 	err = retry.Do(func() error {
 		chainInfo, err = r.getPendingRewards(ctx, delegator, validator, stakingDenom)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return chainInfo, err
 }
 
 // private function with retries
 func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) (sdk.Dec, error) {
+	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("searching for pending rewards")
+
 	request := &distributiontypes.QueryDelegationTotalRewardsRequest{
 		DelegatorAddress: delegator,
 	}
@@ -106,20 +112,29 @@ func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, valida
 	}
 
 	for _, reward := range response.Rewards {
+		r.log.Info().Str("delegator", delegator).Str("examining_validator", reward.ValidatorAddress).Msg("searching for target denom")
 		if strings.EqualFold(validator, reward.ValidatorAddress) {
+			r.log.Info().Str("delegator", delegator).Msg("found validator")
+
 			for _, coin := range reward.Reward {
+				r.log.Info().Str("target", delegator).Str("examining_denom", coin.Denom).Str("staking_denom", stakingDenom).Msg("examinging reward denom")
+
 				if strings.EqualFold(coin.Denom, stakingDenom) {
+					r.log.Info().Str("target", delegator).Msg("found denom")
 					return coin.Amount, nil
 				}
+				r.log.Info().Str("target", delegator).Msg("incorrect denom")
+
 			}
 		}
 	}
 
-	return sdk.NewDec(0), fmt.Errorf("unable to find staking reward denom %s", stakingDenom)
+	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("unable to find any rewards attributable to validator")
+	return sdk.NewDec(0), nil
 }
 
-// BroadcastTxResponse may or may not be populated in the response.
-func (r *rpcClientImpl) BroadcastTxAndWait(
+// Broadcast may or may not be populated in the response.
+func (r *rpcClientImpl) Broadcast(
 	ctx context.Context,
 	txBytes []byte,
 ) (*txtypes.BroadcastTxResponse, error) {
@@ -130,36 +145,14 @@ func (r *rpcClientImpl) BroadcastTxAndWait(
 	}
 
 	// Send tx
-	response, err := r.txClient.BroadcastTx(
+	return r.txClient.BroadcastTx(
 		ctx,
 		query,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	// If successful, attempt to poll for deliver
-	if response.TxResponse.Code == 0 {
-		r.log.Info().Str("tx hash", response.TxResponse.TxHash).Msg("Transaction sent, waiting for inclusion...")
-		time.Sleep(30 * time.Second)
-
-		err = retry.Do(func() error {
-			return r.checkConfirmed(ctx, response.TxResponse.TxHash)
-		}, retry.Delay(30*time.Second), retry.Attempts(10))
-
-		if err != nil {
-			return response, fmt.Errorf("transaction successfully broadcasted but was not confirmed")
-		} else {
-			return response, nil
-		}
-
-	} else {
-		return response, fmt.Errorf("error sending transaction: %s", response.TxResponse.RawLog)
-	}
 }
 
 // Returns nil if the transaction is in a block
-func (r *rpcClientImpl) checkConfirmed(ctx context.Context, txHash string) error {
+func (r *rpcClientImpl) CheckConfirmed(ctx context.Context, txHash string) error {
 	status, err := r.getTxStatus(ctx, txHash)
 	if err != nil {
 		r.log.Error().Err(err).Msg("Error querying tx status")
@@ -167,7 +160,7 @@ func (r *rpcClientImpl) checkConfirmed(ctx context.Context, txHash string) error
 	} else {
 		height := status.TxResponse.Height
 		if height != 0 {
-			r.log.Info().Err(err).Str("tx hash", txHash).Int64("height", height).Msg("Transaction confirmed")
+			r.log.Info().Err(err).Str("tx_hash", txHash).Int64("height", height).Msg("Transaction confirmed")
 			return nil
 		} else {
 			r.log.Warn().Msg("Transaction still not confirmed, still waiting...")
@@ -188,7 +181,10 @@ func (r *rpcClientImpl) GetAccountData(ctx context.Context, address string) (*Ac
 	err = retry.Do(func() error {
 		accountData, err = r.getAccountData(ctx, address)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return accountData, err
 }
@@ -230,7 +226,10 @@ func (r *rpcClientImpl) SimulateTx(
 	err = retry.Do(func() error {
 		simulationResult, err = r.simulateTx(ctx, tx, txConfig, gasFactor)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return simulationResult, err
 }
@@ -269,7 +268,10 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*au
 	err = retry.Do(func() error {
 		grants, err = r.getGrants(ctx, botAddress)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return grants, err
 }
@@ -316,7 +318,10 @@ func (r *rpcClientImpl) GetDelegators(ctx context.Context, validatorAddress stri
 	err = retry.Do(func() error {
 		delegators, err = r.getDelegators(ctx, validatorAddress)
 		return err
-	}, r.delay, r.attempts)
+	}, r.delay, r.attempts, retry.Context(ctx))
+	if err != nil {
+		err = errors.Unwrap(err)
+	}
 
 	return delegators, err
 }
@@ -378,10 +383,13 @@ func retrievePaginatedData[DataType any](
 		err = retry.Do(func() error {
 			rpcResponse, err = retrievePageFn(ctx, nextKey)
 			if err != nil {
-				return nil
+				return err
 			}
 			return nil
-		}, r.delay, r.attempts)
+		}, r.delay, r.attempts, retry.Context(ctx))
+		if err != nil {
+			err = errors.Unwrap(err)
+		}
 
 		if err != nil {
 			return nil, err

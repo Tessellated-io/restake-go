@@ -1,16 +1,17 @@
-- Periodically reconnect the clients?\
-- Context with timeout
+GAS
+- health is only off by one
 
-- make makefile work
-- default gas price increase
-- pull blocks
-- what is with too many pings
-- consider grant sizes or limits and query them correctly
+DOCS
+- header + credits  (ascii art)
+- README + branding
+- Add memo for restake go
 
-- print out what the gas fee is
+GENERAL 
+- min restake amount in mine
+- Reap panics
 - configure restake time
 - Fix default config parsing
-- Rip out sleep
 - healthchecks only on success pings or obvious failures? 
 
-- fix package in go.mod
+- move towards debug log statements
+

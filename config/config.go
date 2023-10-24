@@ -1,20 +1,21 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
 
-	"github.com/restake-go/log"
-	"github.com/restake-go/registry"
 	"github.com/tessellated-io/pickaxe/arrays"
+	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/restake-go/registry"
 )
 
 type RestakeConfig struct {
-	Memo           string
-	Mnemonic       string
-	SleepTimeHours int
-	Chains         []*ChainConfig
+	Memo             string
+	Mnemonic         string
+	RunIntervalHours int
+	Chains           []*ChainConfig
 }
 
 type ChainConfig struct {
@@ -32,7 +33,7 @@ type ChainConfig struct {
 	CoinType int
 }
 
-func GetRestakeConfig(filename string, log *log.Logger) (*RestakeConfig, error) {
+func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*RestakeConfig, error) {
 	// Get data from the file
 	fileConfig, err := parseConfig(filename)
 	if err != nil {
@@ -41,7 +42,7 @@ func GetRestakeConfig(filename string, log *log.Logger) (*RestakeConfig, error) 
 
 	// Request network data for the validator
 	registryClient := registry.NewRegistryClient()
-	restakeChains, err := registryClient.GetRestakeChains(fileConfig.Moniker)
+	restakeChains, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,7 @@ func GetRestakeConfig(filename string, log *log.Logger) (*RestakeConfig, error) 
 		}
 
 		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(restakeChain.Name)
+		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeChain.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -106,10 +107,10 @@ func GetRestakeConfig(filename string, log *log.Logger) (*RestakeConfig, error) 
 	}
 
 	return &RestakeConfig{
-		Mnemonic:       fileConfig.Mnemonic,
-		Memo:           fileConfig.Memo,
-		SleepTimeHours: fileConfig.SleepTimeHours,
-		Chains:         configs,
+		Mnemonic:         fileConfig.Mnemonic,
+		Memo:             fileConfig.Memo,
+		RunIntervalHours: fileConfig.RunIntervalHours,
+		Chains:           configs,
 	}, nil
 }
 
