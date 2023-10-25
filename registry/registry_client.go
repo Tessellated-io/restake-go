@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -27,22 +26,6 @@ func NewRegistryClient() *RegistryClient {
 }
 
 func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator string) ([]RestakeInfo, error) {
-	var chains []RestakeInfo
-	var err error
-
-	err = retry.Do(func() error {
-		chains, err = rc.getRestakeChains(ctx, targetValidator)
-		return err
-	}, rc.delay, rc.attempts, retry.Context(ctx))
-	if err != nil {
-		err = errors.Unwrap(err)
-	}
-
-	return chains, err
-}
-
-// Internal method without retries
-func (rc *RegistryClient) getRestakeChains(ctx context.Context, targetValidator string) ([]RestakeInfo, error) {
 	validators, err := rc.getValidatorsWithRetries(ctx)
 	if err != nil {
 		return nil, err
@@ -136,7 +119,7 @@ func (rc *RegistryClient) makeRequest(ctx context.Context, url string) ([]byte, 
 	client := &http.Client{}
 	resp, err := client.Do(request)
 	if err != nil {
-		log.Fatalf("Error making request: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 

@@ -18,7 +18,6 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Loaded file")
 
 	// Request network data for the validator
 	log.Info().Msg("Loading configs...")
@@ -27,7 +26,6 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Loaded Registry")
 
 	// Filter ignores
 	filteredRestakeInfos := arrays.Filter(restakeInfos, func(input registry.RestakeInfo) bool {
@@ -41,7 +39,6 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		}
 		return true
 	})
-	fmt.Println("Finished ignores")
 
 	// Loop through each restake chain, resolving the data
 	chainRouter, err := router.NewRouter(nil)
@@ -50,14 +47,14 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}
 	configs := []*ChainConfig{}
 	for _, restakeInfo := range filteredRestakeInfos {
-		// Extract the relevant file config
-		fileChainInfo, err := extractFileConfig(restakeInfo.Name, fileConfig.Chains)
+		// Fetch chain info
+		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
 		}
 
-		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
+		// Extract the relevant file config
+		fileChainInfo, err := extractFileConfig(registryChainInfo.ChainID, fileConfig.Chains)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +137,7 @@ func newChainConfig(
 		ValidatorAddress:   config.RestakeInfo.Address,
 		FeeDenom:           config.ChainInfo.Fees.FeeTokens[0].Denom,
 		ExpectedBotAddress: config.RestakeInfo.Restake.Address,
-		MinRestakeAmount:   big.NewInt(int64(config.RestakeInfo.Restake.MinimumReward)),
+		MinRestakeAmount:   big.NewInt(0), //big.NewInt(int64(config.RestakeInfo.Restake.MinimumReward)),
 		AddressPrefix:      config.ChainInfo.Bech32Prefix,
 		chainID:            config.ChainInfo.ChainID,
 		CoinType:           config.ChainInfo.Slip44,
@@ -155,5 +152,5 @@ func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.Fee
 			return &candidate, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to find a network for %s in the config file", needle)
+	return nil, fmt.Errorf("failed to find a fee token for %s in the registry response", needle)
 }

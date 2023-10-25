@@ -29,9 +29,8 @@ type Slashes struct {
 }
 
 type Restake struct {
-	Address       string `json:"address"`
-	RunTime       string `json:"run_time"`
-	MinimumReward int    `json:"minimum_reward"`
+	Address       string      `json:"address"`
+	MinimumReward json.Number `json:"minimum_reward"`
 }
 
 type MissedBlocksPeriods struct {
