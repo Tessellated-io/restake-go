@@ -12,13 +12,6 @@ import (
 	"github.com/tessellated-io/router/router"
 )
 
-type RestakeConfig struct {
-	Memo             string
-	Mnemonic         string
-	RunIntervalHours int
-	Chains           []*ChainConfig
-}
-
 func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*RestakeConfig, error) {
 	// Get data from the file
 	fileConfig, err := parseConfig(filename)
@@ -28,14 +21,14 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 
 	// Request network data for the validator
 	registryClient := registry.NewRegistryClient()
-	restakeChains, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
+	restakeInfos, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
 	if err != nil {
 		return nil, err
 	}
 
 	// Filter ignores
 	log.Info().Msg("Loading configs...")
-	filtered := arrays.Filter(restakeChains, func(input registry.Chain) bool {
+	filteredRestakeInfos := arrays.Filter(restakeInfos, func(input registry.RestakeInfo) bool {
 		log.Info().Str("network", input.Name).Msg("Found config")
 
 		for _, ignore := range fileConfig.Ignores {
@@ -53,21 +46,21 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		return nil, err
 	}
 	configs := []*ChainConfig{}
-	for _, restakeChain := range filtered {
+	for _, restakeInfo := range filteredRestakeInfos {
 		// Extract the relevant file config
-		fileChainInfo, err := extractFileConfig(restakeChain.Name, fileConfig.Chains)
+		fileChainInfo, err := extractFileConfig(restakeInfo.Name, fileConfig.Chains)
 		if err != nil {
 			return nil, err
 		}
 
 		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeChain.Name)
+		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
 		}
 
 		// Create a chain object for the router
-		chain, err := router.NewChain(restakeChain.Name, registryChainInfo.ChainID, &fileChainInfo.Grpc)
+		chain, err := router.NewChain(restakeInfo.Name, registryChainInfo.ChainID, &fileChainInfo.Grpc)
 		if err != nil {
 			return nil, err
 		}
@@ -76,31 +69,16 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 			return nil, err
 		}
 
-		// Find the staking token
-		stakingTokens := registryChainInfo.Staking.StakingTokens
-		if len(stakingTokens) > 1 {
-			panic(fmt.Errorf("found too many staking tokens in chain registry for %s", restakeChain.Name))
-		}
-		stakingDenom := stakingTokens[0].Denom
-
 		// Use that to pay fees
-		feeTokens := registryChainInfo.Fees.FeeTokens
-		feeToken, err := extractFeeToken(stakingDenom, feeTokens)
-		if err != nil {
-			panic(fmt.Errorf("found too many staking tokens in chain registry for %s", restakeChain.Name))
+
+		mergedConfig := &MergedConfig{
+			ChainInfo:       registryChainInfo,
+			UserChainConfig: fileChainInfo,
+			RestakeInfo:     &restakeInfo,
 		}
 
 		config, err := newChainConfig(
-			restakeChain.Name,
-			fileChainInfo.HealthCheckID,
-			restakeChain.Address,
-			registryChainInfo.Fees.FeeTokens[0].Denom,
-			restakeChain.Restake.Address,
-			fileChainInfo.MinRestakeAmount,
-			registryChainInfo.Bech32Prefix,
-			registryChainInfo.ChainID,
-			registryChainInfo.Slip44,
-			feeToken.FixedMinGasPrice,
+			mergedConfig,
 			chainRouter,
 		)
 		if err != nil {
@@ -117,9 +95,9 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}, nil
 }
 
-func extractFileConfig(needle string, haystack []RestakeChain) (*RestakeChain, error) {
+func extractFileConfig(needle string, haystack []UserChainConfig) (*UserChainConfig, error) {
 	for _, candidate := range haystack {
-		if strings.EqualFold(candidate.Name, needle) {
+		if strings.EqualFold(candidate.ChainID, needle) {
 			return &candidate, nil
 		}
 	}
@@ -127,33 +105,44 @@ func extractFileConfig(needle string, haystack []RestakeChain) (*RestakeChain, e
 }
 
 func newChainConfig(
-	network string,
-	healthcheckId string,
-	validatorAddress string,
-	feeDenom string,
-	expectedBotAddress string,
-	minRestakeAmount int,
-	addressPrefix string,
-	chainID string,
-	coinType int,
-	gasPrice float64,
+	config *MergedConfig,
 	router router.Router,
 ) (*ChainConfig, error) {
-	grpc, err := router.GetGrpcEndpoint(chainID)
+	// Pull gRPC and chain name from router so that clients can shim in.
+	grpc, err := router.GetGrpcEndpoint(config.UserChainConfig.ChainID)
+	if err != nil {
+		return nil, err
+	}
+	network, err := router.GetHumanReadableName(config.UserChainConfig.ChainID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Extract the gas price
+	stakingTokens := config.ChainInfo.Staking.StakingTokens
+	if len(stakingTokens) > 1 {
+		panic(fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName))
+	}
+	stakingDenom := stakingTokens[0].Denom
+
+	feeTokens := config.ChainInfo.Fees.FeeTokens
+	feeToken, err := extractFeeToken(stakingDenom, feeTokens)
+	if err != nil {
+		panic(fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName))
+	}
+
+	gasPrice := feeToken.FixedMinGasPrice
+
 	return &ChainConfig{
 		network:            network,
-		HealthcheckId:      healthcheckId,
-		ValidatorAddress:   validatorAddress,
-		FeeDenom:           feeDenom,
-		ExpectedBotAddress: expectedBotAddress,
-		MinRestakeAmount:   big.NewInt(int64(minRestakeAmount)),
-		AddressPrefix:      addressPrefix,
-		chainID:            chainID,
-		CoinType:           coinType,
+		HealthcheckId:      config.UserChainConfig.HealthCheckID,
+		ValidatorAddress:   config.RestakeInfo.Address,
+		FeeDenom:           config.ChainInfo.Fees.FeeTokens[0].Denom,
+		ExpectedBotAddress: config.RestakeInfo.Restake.Address,
+		MinRestakeAmount:   big.NewInt(int64(config.RestakeInfo.Restake.MinimumReward)),
+		AddressPrefix:      config.ChainInfo.Bech32Prefix,
+		chainID:            config.ChainInfo.ChainID,
+		CoinType:           config.ChainInfo.Slip44,
 		nodeGrpcURI:        grpc,
 		GasPrice:           gasPrice,
 	}, nil

@@ -566,6 +566,8 @@ github.com/tendermint/go-amino v0.16.0 h1:GyhmgQKvqF82e2oZeuMSp9JTN0N09emoSZlb2l
 github.com/tendermint/go-amino v0.16.0/go.mod h1:TQU0M1i/ImAo+tYpZi73AU3V/dKeCoMC9Sphe2ZwGME=
 github.com/tessellated-io/pickaxe v1.0.1 h1:3jQwi8tn6V7k+oK+AUx26gj3RRMsqgEq6fHqCdJK6B0=
 github.com/tessellated-io/pickaxe v1.0.1/go.mod h1:BUuDKLC0P9Y098K24k+cOcy4/6rCuiHX8T2vPQGHAQA=
+github.com/tessellated-io/router v0.0.1 h1:BDzIda9AKlmE+WX5DwLNellN8RDYNtbtyUMTqRPba8M=
+github.com/tessellated-io/router v0.0.1/go.mod h1:o3IxshdCRmmxNMmKa0Ej4/4ZR9NULhXm+ci0/814dKA=
 github.com/tidwall/btree v1.6.0 h1:LDZfKfQIBHGHWSwckhXI0RPSXzlo+KYdjK7FWSqOzzg=
 github.com/tidwall/btree v1.6.0/go.mod h1:twD9XRA5jj9VUQGELzDO4HPQTNJsoWWfYEL+EUQ2cKY=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=

@@ -2,6 +2,15 @@ package config
 
 import "math/big"
 
+// Top level config for Restake
+type RestakeConfig struct {
+	Memo             string
+	Mnemonic         string
+	RunIntervalHours int
+	Chains           []*ChainConfig
+}
+
+// A chain config for Restake to run on a chain
 type ChainConfig struct {
 	network            string
 	HealthcheckId      string

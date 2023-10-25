@@ -17,8 +17,6 @@ replace (
 
 	// Downgraded to avoid bugs in following commits which caused simulations to fail.
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-
-	github.com/tessellated-io/router => ../router
 )
 
 require (
@@ -29,7 +27,7 @@ require (
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/pickaxe v1.0.1
-	github.com/tessellated-io/router v0.0.1
+	github.com/tessellated-io/router v0.0.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 

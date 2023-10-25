@@ -26,8 +26,8 @@ func NewRegistryClient() *RegistryClient {
 	}
 }
 
-func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator string) ([]Chain, error) {
-	var chains []Chain
+func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator string) ([]RestakeInfo, error) {
+	var chains []RestakeInfo
 	var err error
 
 	err = retry.Do(func() error {
@@ -42,7 +42,7 @@ func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator 
 }
 
 // Internal method without retries
-func (rc *RegistryClient) getRestakeChains(ctx context.Context, targetValidator string) ([]Chain, error) {
+func (rc *RegistryClient) getRestakeChains(ctx context.Context, targetValidator string) ([]RestakeInfo, error) {
 	validators, err := rc.getValidatorsWithRetries(ctx)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (rc *RegistryClient) getRestakeChains(ctx context.Context, targetValidator 
 		return nil, err
 	}
 
-	validChains := arrays.Filter(validator.Chains, func(input Chain) bool {
+	validChains := arrays.Filter(validator.Chains, func(input RestakeInfo) bool {
 		return input.Restake.Address != ""
 	})
 
