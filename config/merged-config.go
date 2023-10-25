@@ -11,5 +11,5 @@ type MergedConfig struct {
 	*registry.ChainInfo
 
 	// Config about Restake on the chain from the Restake registry
-	*registry.RestakeInfo
+	registry.RestakeInfo
 }

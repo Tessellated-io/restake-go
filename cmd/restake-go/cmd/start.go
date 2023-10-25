@@ -51,7 +51,7 @@ var startCmd = &cobra.Command{
 		fmt.Println("============================================================")
 		fmt.Println("Go Go... Restake-Go!")
 		fmt.Println()
-		fmt.Println("A Product Of Tessellated / tessellated.io")
+		fmt.Println("A Product Of Tessellated // tessellated.io")
 		fmt.Println("============================================================")
 		fmt.Println("")
 

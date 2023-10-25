@@ -18,16 +18,18 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Loaded file")
 
 	// Request network data for the validator
+	log.Info().Msg("Loading configs...")
 	registryClient := registry.NewRegistryClient()
 	restakeInfos, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Loaded Registry")
 
 	// Filter ignores
-	log.Info().Msg("Loading configs...")
 	filteredRestakeInfos := arrays.Filter(restakeInfos, func(input registry.RestakeInfo) bool {
 		log.Info().Str("network", input.Name).Msg("Found config")
 
@@ -39,6 +41,7 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		}
 		return true
 	})
+	fmt.Println("Finished ignores")
 
 	// Loop through each restake chain, resolving the data
 	chainRouter, err := router.NewRouter(nil)
@@ -69,12 +72,10 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 			return nil, err
 		}
 
-		// Use that to pay fees
-
 		mergedConfig := &MergedConfig{
 			ChainInfo:       registryChainInfo,
 			UserChainConfig: fileChainInfo,
-			RestakeInfo:     &restakeInfo,
+			RestakeInfo:     restakeInfo,
 		}
 
 		config, err := newChainConfig(
