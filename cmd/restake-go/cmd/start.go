@@ -6,18 +6,17 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os/user"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	os2 "github.com/cometbft/cometbft/libs/os"
 	"github.com/spf13/cobra"
+	pconfig "github.com/tessellated-io/pickaxe/config"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/codec"
 	"github.com/tessellated-io/restake-go/config"
 	"github.com/tessellated-io/restake-go/health"
-	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/restake"
 	"github.com/tessellated-io/restake-go/rpc"
 )
@@ -59,7 +58,7 @@ var startCmd = &cobra.Command{
 		log := log.NewLogger()
 
 		// Load config
-		expandedConfigFile := expandHomeDir(configFile)
+		expandedConfigFile := pconfig.NormalizeConfigFile(configFile)
 		configOk := os2.FileExists(expandedConfigFile)
 		if !configOk {
 			panic(fmt.Sprintf("Failed to load config file at: %s", configFile))
@@ -147,19 +146,6 @@ func init() {
 
 	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "~/.restake/config.yml", "A path to the configuration file")
 	startCmd.Flags().Float64VarP(&gasMultiplier, "gas-multiplier", "g", 1.2, "The multiplier to use for gas")
-}
-
-// TODO: Move to pickaxe here
-func expandHomeDir(path string) string {
-	if !strings.HasPrefix(path, "~") {
-		return path
-	}
-
-	usr, err := user.Current()
-	if err != nil {
-		panic(fmt.Errorf("failed to get user's home directory: %v", err))
-	}
-	return strings.Replace(path, "~", usr.HomeDir, 1)
 }
 
 func printResults(results RestakeResults, log *log.Logger) {

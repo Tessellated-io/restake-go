@@ -11,7 +11,7 @@ import (
 	retry "github.com/avast/retry-go/v4"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"

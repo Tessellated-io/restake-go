@@ -7,7 +7,7 @@ import (
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/restake-go/config"
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/rpc"
 	"github.com/tessellated-io/restake-go/signer"
 

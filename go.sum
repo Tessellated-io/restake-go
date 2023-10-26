@@ -564,8 +564,8 @@ github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 h1:epCh84lMvA70
 github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7/go.mod h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc=
 github.com/tendermint/go-amino v0.16.0 h1:GyhmgQKvqF82e2oZeuMSp9JTN0N09emoSZlb2lyGa2E=
 github.com/tendermint/go-amino v0.16.0/go.mod h1:TQU0M1i/ImAo+tYpZi73AU3V/dKeCoMC9Sphe2ZwGME=
-github.com/tessellated-io/pickaxe v1.0.1 h1:3jQwi8tn6V7k+oK+AUx26gj3RRMsqgEq6fHqCdJK6B0=
-github.com/tessellated-io/pickaxe v1.0.1/go.mod h1:BUuDKLC0P9Y098K24k+cOcy4/6rCuiHX8T2vPQGHAQA=
+github.com/tessellated-io/pickaxe v1.0.2 h1:AWByOvEY4Ux0SUXLap5yFlG6tmqycfA60YyRRfFTyp0=
+github.com/tessellated-io/pickaxe v1.0.2/go.mod h1:pLlryjuiyWCG6P6bycabeqQEoAA7SY7IoDwLLASvjfw=
 github.com/tessellated-io/router v0.0.2 h1:YCm0r0zKvb9E3bufjPalkWM9Z3VD9xZiGnHarjbxQJ4=
 github.com/tessellated-io/router v0.0.2/go.mod h1:o3IxshdCRmmxNMmKa0Ej4/4ZR9NULhXm+ci0/814dKA=
 github.com/tidwall/btree v1.6.0 h1:LDZfKfQIBHGHWSwckhXI0RPSXzlo+KYdjK7FWSqOzzg=

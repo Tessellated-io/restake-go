@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/registry"
 	"github.com/tessellated-io/router/router"
 )

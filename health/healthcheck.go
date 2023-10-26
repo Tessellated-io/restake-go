@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 )
 
 type PingType string

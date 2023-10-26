@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/tessellated-io/pickaxe/crypto"
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/rpc"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -110,7 +110,6 @@ func (s *Signer) SendMessages(
 			// 1. Try to get a confirmation on the first try. If not, increass the gas.
 			// Check that it confirmed.
 			// If it failed, that likely means we should use more gas.
-			// TODO: extract the gas failure function
 			err := s.rpcClient.CheckConfirmed(ctx, txHash)
 			if err == nil {
 				// Hurrah, things worked out!
@@ -136,7 +135,6 @@ func (s *Signer) SendMessages(
 				// Re-poll
 				err = s.rpcClient.CheckConfirmed(ctx, txHash)
 				if err == nil {
-					// TODO: Dedupe with above
 					// Hurrah, things worked out!
 					s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
 					return txHash, nil
