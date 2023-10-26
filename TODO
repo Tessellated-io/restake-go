@@ -17,3 +17,5 @@ GENERAL
 
 - make auto refreshes work
 - Support min amounts?
+- cleanup logging
+- logging header

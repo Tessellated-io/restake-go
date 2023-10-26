@@ -145,6 +145,8 @@ func (r *RestakeManager) restakeDelegators(ctx context.Context, targets []*resta
 			ValidatorAddress: r.validatorAddress,
 			Amount:           delegateAmount,
 		}
+		r.log.Info().Msg("Made delegate message")
+		r.log.Info().Msg(delegateMessage.String())
 
 		delegateMsgs = append(delegateMsgs, delegateMessage)
 	}

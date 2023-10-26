@@ -2,11 +2,12 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
-	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/registry"
 	"github.com/tessellated-io/router/router"
@@ -27,30 +28,31 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		return nil, err
 	}
 
-	// Filter ignores
-	filteredRestakeInfos := arrays.Filter(restakeInfos, func(input registry.RestakeInfo) bool {
-		log.Info().Str("network", input.Name).Msg("Found config")
-
-		for _, ignore := range fileConfig.Ignores {
-			if strings.EqualFold(input.Name, ignore) {
-				log.Info().Str("network", ignore).Msg("		/ Ignoring network marked to ignore")
-				return false
-			}
-		}
-		return true
-	})
-
 	// Loop through each restake chain, resolving the data
 	chainRouter, err := router.NewRouter(nil)
 	if err != nil {
 		return nil, err
 	}
 	configs := []*ChainConfig{}
-	for _, restakeInfo := range filteredRestakeInfos {
+	for _, restakeInfo := range restakeInfos {
+		log.Info().Str("network", restakeInfo.Name).Msg("Restake registry configuration found")
+
 		// Fetch chain info
 		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
+		}
+
+		// Ignore networks marked to ignore
+		shouldIgnore := false
+		for _, ignore := range fileConfig.Ignores {
+			if strings.EqualFold(registryChainInfo.ChainID, ignore) {
+				log.Info().Str("network", ignore).Msg("		/ Config specified as ignored")
+				shouldIgnore = true
+			}
+		}
+		if shouldIgnore {
+			continue
 		}
 
 		// Extract the relevant file config
@@ -119,17 +121,22 @@ func newChainConfig(
 	// Extract the gas price
 	stakingTokens := config.ChainInfo.Staking.StakingTokens
 	if len(stakingTokens) > 1 {
-		panic(fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName))
+		return nil, fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName)
 	}
 	stakingDenom := stakingTokens[0].Denom
 
 	feeTokens := config.ChainInfo.Fees.FeeTokens
 	feeToken, err := extractFeeToken(stakingDenom, feeTokens)
 	if err != nil {
-		panic(fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName))
+		return nil, fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName)
 	}
-
 	gasPrice := feeToken.FixedMinGasPrice
+
+	// Convert the minimum reward into a big int
+	minimumReward, err := numberToBigInt(config.RestakeInfo.Restake.MinimumReward)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ChainConfig{
 		network:            network,
@@ -137,7 +144,7 @@ func newChainConfig(
 		ValidatorAddress:   config.RestakeInfo.Address,
 		FeeDenom:           config.ChainInfo.Fees.FeeTokens[0].Denom,
 		ExpectedBotAddress: config.RestakeInfo.Restake.Address,
-		MinRestakeAmount:   big.NewInt(0), //big.NewInt(int64(config.RestakeInfo.Restake.MinimumReward)),
+		MinRestakeAmount:   minimumReward,
 		AddressPrefix:      config.ChainInfo.Bech32Prefix,
 		chainID:            config.ChainInfo.ChainID,
 		CoinType:           config.ChainInfo.Slip44,
@@ -153,4 +160,14 @@ func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.Fee
 		}
 	}
 	return nil, fmt.Errorf("failed to find a fee token for %s in the registry response", needle)
+}
+
+func numberToBigInt(num json.Number) (*big.Int, error) {
+	if _, err := strconv.Atoi(string(num)); err == nil {
+		n := new(big.Int)
+		n.SetString(string(num), 10)
+		return n, nil
+	} else {
+		return nil, fmt.Errorf("unexpected floating point value for min rewards: %s", num)
+	}
 }
