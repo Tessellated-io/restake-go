@@ -2,36 +2,16 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
-	"github.com/tessellated-io/pickaxe/arrays"
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/registry"
+	"github.com/tessellated-io/router/router"
 )
-
-type RestakeConfig struct {
-	Memo             string
-	Mnemonic         string
-	RunIntervalHours int
-	Chains           []*ChainConfig
-}
-
-type ChainConfig struct {
-	Network            string
-	HealthcheckId      string
-	ValidatorAddress   string
-	FeeDenom           string
-	ExpectedBotAddress string
-	MinRestakeAmount   *big.Int
-	AddressPrefix      string
-	ChainId            string
-	NodeGrpcURI        string
-	GasPrice           float64
-
-	CoinType int
-}
 
 func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*RestakeConfig, error) {
 	// Get data from the file
@@ -41,68 +21,69 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}
 
 	// Request network data for the validator
+	log.Info().Msg("Loading configs...")
 	registryClient := registry.NewRegistryClient()
-	restakeChains, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
+	restakeInfos, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter ignores
-	log.Info().Msg("Loading configs...")
-	filtered := arrays.Filter(restakeChains, func(input registry.Chain) bool {
-		log.Info().Str("network", input.Name).Msg("Found config")
-
-		for _, ignore := range fileConfig.Ignores {
-			if strings.EqualFold(input.Name, ignore) {
-				log.Info().Str("network", ignore).Msg("		/ Ignoring network marked to ignore")
-				return false
-			}
-		}
-		return true
-	})
-
 	// Loop through each restake chain, resolving the data
+	chainRouter, err := router.NewRouter(nil)
+	if err != nil {
+		return nil, err
+	}
 	configs := []*ChainConfig{}
-	for _, restakeChain := range filtered {
-		// Extract the relevant file config
-		fileChainInfo, err := extractFileConfig(restakeChain.Name, fileConfig.Chains)
-		if err != nil {
-			return nil, err
-		}
+	for _, restakeInfo := range restakeInfos {
+		log.Info().Str("network", restakeInfo.Name).Msg("Restake registry configuration found")
 
 		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeChain.Name)
+		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
 		}
 
-		// Find the staking token
-		stakingTokens := registryChainInfo.Staking.StakingTokens
-		if len(stakingTokens) > 1 {
-			panic(fmt.Errorf("found too many staking tokens in chain registry for %s", restakeChain.Name))
+		// Ignore networks marked to ignore
+		shouldIgnore := false
+		for _, ignore := range fileConfig.Ignores {
+			if strings.EqualFold(registryChainInfo.ChainID, ignore) {
+				log.Info().Str("network", ignore).Msg("		/ Config specified as ignored")
+				shouldIgnore = true
+			}
 		}
-		stakingDenom := stakingTokens[0].Denom
+		if shouldIgnore {
+			continue
+		}
 
-		// Use that to pay fees
-		feeTokens := registryChainInfo.Fees.FeeTokens
-		feeToken, err := extractFeeToken(stakingDenom, feeTokens)
+		// Extract the relevant file config
+		fileChainInfo, err := extractFileConfig(registryChainInfo.ChainID, fileConfig.Chains)
 		if err != nil {
-			panic(fmt.Errorf("found too many staking tokens in chain registry for %s", restakeChain.Name))
+			return nil, err
 		}
 
-		config := newChainConfig(
-			restakeChain.Name,
-			fileChainInfo.HealthCheckID,
-			restakeChain.Address,
-			registryChainInfo.Fees.FeeTokens[0].Denom,
-			restakeChain.Restake.Address,
-			fileChainInfo.MinRestakeAmount,
-			registryChainInfo.Bech32Prefix,
-			registryChainInfo.ChainID,
-			registryChainInfo.Slip44,
-			fileChainInfo.Grpc,
-			feeToken.FixedMinGasPrice,
+		// Create a chain object for the router
+		chain, err := router.NewChain(restakeInfo.Name, registryChainInfo.ChainID, &fileChainInfo.Grpc)
+		if err != nil {
+			return nil, err
+		}
+		err = chainRouter.AddChain(chain)
+		if err != nil {
+			return nil, err
+		}
+
+		mergedConfig := &MergedConfig{
+			ChainInfo:       registryChainInfo,
+			UserChainConfig: fileChainInfo,
+			RestakeInfo:     restakeInfo,
+		}
+
+		config, err := newChainConfig(
+			mergedConfig,
+			chainRouter,
 		)
+		if err != nil {
+			return nil, err
+		}
 		configs = append(configs, config)
 	}
 
@@ -114,9 +95,9 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}, nil
 }
 
-func extractFileConfig(needle string, haystack []RestakeChain) (*RestakeChain, error) {
+func extractFileConfig(needle string, haystack []UserChainConfig) (*UserChainConfig, error) {
 	for _, candidate := range haystack {
-		if strings.EqualFold(candidate.Name, needle) {
+		if strings.EqualFold(candidate.ChainID, needle) {
 			return &candidate, nil
 		}
 	}
@@ -124,31 +105,52 @@ func extractFileConfig(needle string, haystack []RestakeChain) (*RestakeChain, e
 }
 
 func newChainConfig(
-	network string,
-	healthcheckId string,
-	validatorAddress string,
-	feeDenom string,
-	expectedBotAddress string,
-	minRestakeAmount int,
-	addressPrefix string,
-	chainId string,
-	coinType int,
-	grpc string,
-	gasPrice float64,
-) *ChainConfig {
-	return &ChainConfig{
-		Network:            network,
-		HealthcheckId:      healthcheckId,
-		ValidatorAddress:   validatorAddress,
-		FeeDenom:           feeDenom,
-		ExpectedBotAddress: expectedBotAddress,
-		MinRestakeAmount:   big.NewInt(int64(minRestakeAmount)),
-		AddressPrefix:      addressPrefix,
-		ChainId:            chainId,
-		CoinType:           coinType,
-		NodeGrpcURI:        grpc,
-		GasPrice:           gasPrice,
+	config *MergedConfig,
+	router router.Router,
+) (*ChainConfig, error) {
+	// Pull gRPC and chain name from router so that clients can shim in.
+	grpc, err := router.GetGrpcEndpoint(config.UserChainConfig.ChainID)
+	if err != nil {
+		return nil, err
 	}
+	network, err := router.GetHumanReadableName(config.UserChainConfig.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the gas price
+	stakingTokens := config.ChainInfo.Staking.StakingTokens
+	if len(stakingTokens) > 1 {
+		return nil, fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName)
+	}
+	stakingDenom := stakingTokens[0].Denom
+
+	feeTokens := config.ChainInfo.Fees.FeeTokens
+	feeToken, err := extractFeeToken(stakingDenom, feeTokens)
+	if err != nil {
+		return nil, fmt.Errorf("found too many staking tokens in chain registry for %s", config.ChainInfo.ChainName)
+	}
+	gasPrice := feeToken.FixedMinGasPrice
+
+	// Convert the minimum reward into a big int
+	minimumReward, err := numberToBigInt(config.RestakeInfo.Restake.MinimumReward)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChainConfig{
+		network:            network,
+		HealthcheckId:      config.UserChainConfig.HealthCheckID,
+		ValidatorAddress:   config.RestakeInfo.Address,
+		FeeDenom:           config.ChainInfo.Fees.FeeTokens[0].Denom,
+		ExpectedBotAddress: config.RestakeInfo.Restake.Address,
+		MinRestakeAmount:   minimumReward,
+		AddressPrefix:      config.ChainInfo.Bech32Prefix,
+		chainID:            config.ChainInfo.ChainID,
+		CoinType:           config.ChainInfo.Slip44,
+		nodeGrpcURI:        grpc,
+		GasPrice:           gasPrice,
+	}, nil
 }
 
 func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.FeeToken, error) {
@@ -157,5 +159,15 @@ func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.Fee
 			return &candidate, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to find a network for %s in the config file", needle)
+	return nil, fmt.Errorf("failed to find a fee token for %s in the registry response", needle)
+}
+
+func numberToBigInt(num json.Number) (*big.Int, error) {
+	if _, err := strconv.Atoi(string(num)); err == nil {
+		n := new(big.Int)
+		n.SetString(string(num), 10)
+		return n, nil
+	} else {
+		return nil, fmt.Errorf("unexpected floating point value for min rewards: %s", num)
+	}
 }

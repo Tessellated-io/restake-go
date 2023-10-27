@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 )
 
 type PingType string
@@ -34,20 +34,13 @@ func NewHealthCheckClient(network, uuid string, log *log.Logger) *HealthCheckCli
 	}
 }
 
-func (hm *HealthCheckClient) Start() error {
-	hm.log.Info().Str("network", hm.network).Msg("🏥 Starting health")
-
-	pingMessage := fmt.Sprintf("🏥 Starting health on %s", hm.network)
-	return hm.ping(Start, pingMessage)
-}
-
 func (hm *HealthCheckClient) Success(message string) error {
 	hm.log.Info().Str("network", hm.network).Msg("❤️  Health success")
 	return hm.ping(Success, message)
 }
 
 func (hm *HealthCheckClient) Failed(err error) error {
-	hm.log.Error().Err(err).Str("network", hm.network).Msg("\u200d  Health failed")
+	hm.log.Error().Err(err).Str("network", hm.network).Msg("❤️\u200d🩹  Health failed")
 
 	return hm.ping(Fail, err.Error())
 }

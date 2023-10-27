@@ -29,7 +29,8 @@ type Slashes struct {
 }
 
 type Restake struct {
-	Address string `json:"address"`
+	Address       string      `json:"address"`
+	MinimumReward json.Number `json:"minimum_reward"`
 }
 
 type MissedBlocksPeriods struct {
@@ -37,7 +38,7 @@ type MissedBlocksPeriods struct {
 	Missed int `json:"missed"`
 }
 
-type Chain struct {
+type RestakeInfo struct {
 	Name        string      `json:"name"`
 	Restake     Restake     `json:"restake"`
 	Moniker     string      `json:"moniker"`
@@ -55,12 +56,12 @@ type Chain struct {
 }
 
 type Validator struct {
-	Path       string  `json:"path"`
-	Name       string  `json:"name"`
-	Identity   string  `json:"identity"`
-	TotalUSD   float64 `json:"total_usd"`
-	TotalUsers int     `json:"total_users"`
-	Chains     []Chain `json:"chains"`
+	Path       string        `json:"path"`
+	Name       string        `json:"name"`
+	Identity   string        `json:"identity"`
+	TotalUSD   float64       `json:"total_usd"`
+	TotalUsers int           `json:"total_users"`
+	Chains     []RestakeInfo `json:"chains"`
 }
 
 type Response struct {

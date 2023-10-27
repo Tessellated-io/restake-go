@@ -11,7 +11,7 @@ import (
 	retry "github.com/avast/retry-go/v4"
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/grpc"
-	"github.com/tessellated-io/restake-go/log"
+	"github.com/tessellated-io/pickaxe/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -100,8 +100,6 @@ func (r *rpcClientImpl) GetPendingRewards(ctx context.Context, delegator, valida
 
 // private function with retries
 func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, validator, stakingDenom string) (sdk.Dec, error) {
-	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("searching for pending rewards")
-
 	request := &distributiontypes.QueryDelegationTotalRewardsRequest{
 		DelegatorAddress: delegator,
 	}
@@ -112,24 +110,16 @@ func (r *rpcClientImpl) getPendingRewards(ctx context.Context, delegator, valida
 	}
 
 	for _, reward := range response.Rewards {
-		r.log.Info().Str("delegator", delegator).Str("examining_validator", reward.ValidatorAddress).Msg("searching for target denom")
 		if strings.EqualFold(validator, reward.ValidatorAddress) {
-			r.log.Info().Str("delegator", delegator).Msg("found validator")
-
 			for _, coin := range reward.Reward {
-				r.log.Info().Str("target", delegator).Str("examining_denom", coin.Denom).Str("staking_denom", stakingDenom).Msg("examinging reward denom")
-
 				if strings.EqualFold(coin.Denom, stakingDenom) {
-					r.log.Info().Str("target", delegator).Msg("found denom")
 					return coin.Amount, nil
 				}
-				r.log.Info().Str("target", delegator).Msg("incorrect denom")
-
 			}
 		}
 	}
 
-	r.log.Info().Str("delegator", delegator).Str("validator", validator).Msg("unable to find any rewards attributable to validator")
+	r.log.Debug().Str("delegator", delegator).Str("validator", validator).Msg("unable to find any rewards attributable to validator")
 	return sdk.NewDec(0), nil
 }
 
@@ -160,10 +150,10 @@ func (r *rpcClientImpl) CheckConfirmed(ctx context.Context, txHash string) error
 	} else {
 		height := status.TxResponse.Height
 		if height != 0 {
-			r.log.Info().Err(err).Str("tx_hash", txHash).Int64("height", height).Msg("Transaction confirmed")
+			r.log.Debug().Err(err).Str("tx_hash", txHash).Int64("height", height).Msg("Transaction confirmed")
 			return nil
 		} else {
-			r.log.Warn().Msg("Transaction still not confirmed, still waiting...")
+			r.log.Debug().Msg("Transaction still not confirmed, still waiting...")
 			return fmt.Errorf("transaction not yet confirmed")
 		}
 	}
@@ -278,8 +268,6 @@ func (r *rpcClientImpl) GetGrants(ctx context.Context, botAddress string) ([]*au
 
 // private function without retries
 func (r *rpcClientImpl) getGrants(ctx context.Context, botAddress string) ([]*authztypes.GrantAuthorization, error) {
-	r.log.Info().Str("bot address", botAddress).Msg("Fetching grants for bot")
-
 	getGrantsFunc := func(ctx context.Context, pageKey []byte) (*paginatedRpcResponse[*authztypes.GrantAuthorization], error) {
 		pagination := &query.PageRequest{
 			Key:   pageKey,
@@ -306,7 +294,7 @@ func (r *rpcClientImpl) getGrants(ctx context.Context, botAddress string) ([]*au
 	if err != nil {
 		r.log.Error().Err(err).Str("bot address", botAddress).Msg("Failed to retrieve grants")
 	}
-	r.log.Info().Int("num grants", len(grants)).Str("bot address", botAddress).Msg("Retrieved grants")
+	r.log.Debug().Int("num grants", len(grants)).Str("bot address", botAddress).Msg("Retrieved grants")
 
 	return grants, nil
 }
@@ -355,7 +343,7 @@ func (r *rpcClientImpl) getDelegators(ctx context.Context, validatorAddress stri
 	if err != nil {
 		return nil, err
 	}
-	r.log.Info().Str("validator address", validatorAddress).Int("num delegators", len(delegators)).Msg("Retrieved delegations")
+	r.log.Debug().Str("validator address", validatorAddress).Int("num delegators", len(delegators)).Msg("Retrieved delegations")
 
 	return delegators, nil
 }

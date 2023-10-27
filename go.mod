@@ -2,32 +2,15 @@ module github.com/tessellated-io/restake-go
 
 go 1.20
 
-// Below are the long-lived replace of the Cosmos SDK
-replace (
-	// use cosmos fork of keyring
-	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
-	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.37.0
-	github.com/cosmos/iavl => github.com/cosmos/iavl v0.20.0
-
-	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
-	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2
-
-	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
-	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
-
-	// Downgraded to avoid bugs in following commits which caused simulations to fail.
-	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-)
-
 require (
 	github.com/avast/retry-go/v4 v4.5.0
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cosmos/cosmos-sdk v0.47.5
-	github.com/ethereum/go-ethereum v1.11.5
 	github.com/evmos/evmos/v14 v14.0.0
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
-	github.com/tessellated-io/pickaxe v1.0.1
+	github.com/tessellated-io/pickaxe v1.0.3
+	github.com/tessellated-io/router v0.0.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -70,12 +53,12 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
+	github.com/ethereum/go-ethereum v1.11.5 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/getsentry/sentry-go v0.23.0 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.1.0 // indirect
@@ -153,4 +136,21 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pgregory.net/rapid v0.5.5 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
+)
+
+// Below are the long-lived replace of the Cosmos SDK
+replace (
+	// use cosmos fork of keyring
+	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
+	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.37.0
+	github.com/cosmos/iavl => github.com/cosmos/iavl v0.20.0
+
+	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
+	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2
+
+	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
+	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
+
+	// Downgraded to avoid bugs in following commits which caused simulations to fail.
+	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 )

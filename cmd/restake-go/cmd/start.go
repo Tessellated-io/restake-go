@@ -6,18 +6,18 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os/user"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	os2 "github.com/cometbft/cometbft/libs/os"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	pconfig "github.com/tessellated-io/pickaxe/config"
+	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/codec"
 	"github.com/tessellated-io/restake-go/config"
 	"github.com/tessellated-io/restake-go/health"
-	"github.com/tessellated-io/restake-go/log"
 	"github.com/tessellated-io/restake-go/restake"
 	"github.com/tessellated-io/restake-go/rpc"
 )
@@ -25,6 +25,7 @@ import (
 var (
 	configFile    string
 	gasMultiplier float64
+	debug         bool
 )
 
 type RestakeResult struct {
@@ -49,17 +50,21 @@ var startCmd = &cobra.Command{
 
 		fmt.Println()
 		fmt.Println("============================================================")
-		fmt.Println("Go Go... Restake-Go!")
+		fmt.Println("Restake Go")
 		fmt.Println()
-		fmt.Println("A Product Of Tessellated / tessellated.io")
+		fmt.Println("A Product Of Tessellated // tessellated.io")
 		fmt.Println("============================================================")
 		fmt.Println("")
 
 		// Configure a logger
-		log := log.NewLogger()
+		logLevel := zerolog.InfoLevel
+		if debug {
+			logLevel = zerolog.DebugLevel
+		}
+		log := log.NewLogger(logLevel)
 
 		// Load config
-		expandedConfigFile := expandHomeDir(configFile)
+		expandedConfigFile := pconfig.NormalizeConfigFile(configFile)
 		configOk := os2.FileExists(expandedConfigFile)
 		if !configOk {
 			panic(fmt.Sprintf("Failed to load config file at: %s", configFile))
@@ -78,21 +83,21 @@ var startCmd = &cobra.Command{
 		restakeManagers := []*restake.RestakeManager{}
 		healthClients := []*health.HealthCheckClient{}
 		for _, chain := range config.Chains {
-			prefixedLogger := log.ApplyPrefix(fmt.Sprintf(" [%s]", chain.Network))
+			prefixedLogger := log.ApplyPrefix(fmt.Sprintf(" [%s]", chain.Network()))
 
-			rpcClient, err := rpc.NewRpcClient(chain.NodeGrpcURI, cdc, prefixedLogger)
+			rpcClient, err := rpc.NewRpcClient(chain.ChainGrpcURI(), cdc, prefixedLogger)
 			if err != nil {
 				panic(err)
 			}
 
 			healthcheckId := chain.HealthcheckId
 			if healthcheckId == "" {
-				panic(fmt.Sprintf("No health check id found for network %s", chain.Network))
+				panic(fmt.Sprintf("no health check id found for network %s", chain.Network()))
 			}
-			healthClient := health.NewHealthCheckClient(chain.Network, healthcheckId, prefixedLogger)
+			healthClient := health.NewHealthCheckClient(chain.Network(), healthcheckId, prefixedLogger)
 			healthClients = append(healthClients, healthClient)
 
-			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, gasMultiplier, *chain, prefixedLogger)
+			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, RestakeVersion, gasMultiplier, *chain, prefixedLogger)
 			if err != nil {
 				panic(err)
 			}
@@ -113,7 +118,6 @@ var startCmd = &cobra.Command{
 					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
 					defer cancelFunc()
 
-					_ = healthClient.Start()
 					txHash, err := restakeManager.Restake(timeoutContext)
 					if err != nil {
 						_ = healthClient.Failed(err)
@@ -136,7 +140,7 @@ var startCmd = &cobra.Command{
 				printResults(results, log)
 			}()
 
-			log.Info().Dur("next run in hours", runInterval).Msg("Finished restaking. Sleeping until next round")
+			log.Info().Int("next run in hours", config.RunIntervalHours).Msg("Finished restaking. Sleeping until next round")
 			time.Sleep(runInterval)
 		}
 	},
@@ -147,19 +151,7 @@ func init() {
 
 	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "~/.restake/config.yml", "A path to the configuration file")
 	startCmd.Flags().Float64VarP(&gasMultiplier, "gas-multiplier", "g", 1.2, "The multiplier to use for gas")
-}
-
-// TODO: Move to pickaxe here
-func expandHomeDir(path string) string {
-	if !strings.HasPrefix(path, "~") {
-		return path
-	}
-
-	usr, err := user.Current()
-	if err != nil {
-		panic(fmt.Errorf("failed to get user's home directory: %v", err))
-	}
-	return strings.Replace(path, "~", usr.HomeDir, 1)
+	startCmd.Flags().BoolVarP(&debug, "debug", "d", false, "whether to enable debug logging")
 }
 
 func printResults(results RestakeResults, log *log.Logger) {
