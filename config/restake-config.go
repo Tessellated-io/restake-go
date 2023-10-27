@@ -7,7 +7,9 @@ type RestakeConfig struct {
 	Memo             string
 	Mnemonic         string
 	RunIntervalHours int
-	Chains           []*ChainConfig
+	GasMultiplier    float64
+
+	Chains []*ChainConfig
 }
 
 // A chain config for Restake to run on a chain

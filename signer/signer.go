@@ -104,7 +104,7 @@ func (s *Signer) SendMessages(
 
 			// Wait for the transaction to hit the chain.
 			pollDelay := 30 * time.Second
-			s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction sent, waiting for inclusion...")
+			s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("💤 Transaction sent, waiting for inclusion...")
 			time.Sleep(pollDelay)
 
 			// 1. Try to get a confirmation on the first try. If not, increass the gas.
@@ -113,14 +113,14 @@ func (s *Signer) SendMessages(
 			err := s.rpcClient.CheckConfirmed(ctx, txHash)
 			if err == nil {
 				// Hurrah, things worked out!
-				s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+				s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("✅ Transaction confirmed. Success.")
 				return txHash, nil
 			}
 
 			// 2a. If the tx broadcast did not error, but it hasn't landed, then we can likely affor more in gas.
 			s.gasPrice += feeIncrement
 			newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
-			s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
+			s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("⛽ Transaction broadcasted but failed to confirm. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
 
 			// Failing for gas seems silly, so let's go ahead and retry.
 			i--
@@ -136,7 +136,7 @@ func (s *Signer) SendMessages(
 				err = s.rpcClient.CheckConfirmed(ctx, txHash)
 				if err == nil {
 					// Hurrah, things worked out!
-					s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("Transaction confirmed. Success.")
+					s.log.Info().Str("tx_hash", txHash).Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("✅ Transaction confirmed. Success.")
 					return txHash, nil
 				}
 			}
@@ -149,19 +149,19 @@ func (s *Signer) SendMessages(
 				s.gasPrice += feeIncrement
 				s.gasPrice = float64(maybeNewMinFee/int(gasWanted)) + 1
 				newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
-				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg("Adjusting gas price due to a minimum global fee error")
+				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg("⛽ Adjusting gas price due to a minimum global fee error")
 				continue
 			} else {
 				// Otherwise, use normal increment logic.
 				s.gasPrice += feeIncrement
 				newGasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
-				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Transaction failed to broadcast with gas error. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
+				s.log.Info().Str("new_gas_price", newGasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("⛽ Transaction failed to broadcast with gas error. Likely need more gas. Increasing gas price. Code: %d, Logs: %s", code, logs))
 			}
 
 			// Failing for gas seems silly, so let's go ahead and retry.
 			i--
 		} else if code != 0 {
-			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
+			s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg(fmt.Sprintf("⚠️ Failed to apply transaction batch after broadcast. Code %d, Logs: %s", code, logs))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -169,7 +169,7 @@ func (s *Signer) SendMessages(
 
 	// Log that we're giving up and what price we gave up at.
 	gasPrice := fmt.Sprintf("%f%s", s.gasPrice, s.feeDenom)
-	s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("failed in all attempts to broadcast transaction")
+	s.log.Info().Str("gas_price", gasPrice).Float64("gas_factor", s.gasFactor).Msg("❌ failed in all attempts to broadcast transaction")
 
 	if err != nil {
 		// All tries exhausted, give up and return an error.
@@ -238,7 +238,7 @@ func (s *Signer) sendMessages(
 	// Sign the tx
 	signedTx, err := s.signTx(txb, accountData, txConfig)
 	if err != nil {
-		panic(err)
+		return nil, 0, err
 	}
 
 	response, err := s.rpcClient.Broadcast(ctx, signedTx)

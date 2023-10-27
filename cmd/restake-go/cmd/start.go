@@ -24,6 +24,7 @@ import (
 var (
 	configFile    string
 	gasMultiplier float64
+	debug         bool
 )
 
 type RestakeResult struct {
@@ -48,7 +49,7 @@ var startCmd = &cobra.Command{
 
 		fmt.Println()
 		fmt.Println("============================================================")
-		fmt.Println("Go Go... Restake-Go!")
+		fmt.Println("Restake Go")
 		fmt.Println()
 		fmt.Println("A Product Of Tessellated // tessellated.io")
 		fmt.Println("============================================================")
@@ -91,7 +92,7 @@ var startCmd = &cobra.Command{
 			healthClient := health.NewHealthCheckClient(chain.Network(), healthcheckId, prefixedLogger)
 			healthClients = append(healthClients, healthClient)
 
-			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, gasMultiplier, *chain, prefixedLogger)
+			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, RestakeVersion, gasMultiplier, *chain, prefixedLogger)
 			if err != nil {
 				panic(err)
 			}
@@ -112,7 +113,6 @@ var startCmd = &cobra.Command{
 					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
 					defer cancelFunc()
 
-					_ = healthClient.Start()
 					txHash, err := restakeManager.Restake(timeoutContext)
 					if err != nil {
 						_ = healthClient.Failed(err)
@@ -135,7 +135,7 @@ var startCmd = &cobra.Command{
 				printResults(results, log)
 			}()
 
-			log.Info().Dur("next run in hours", runInterval).Msg("Finished restaking. Sleeping until next round")
+			log.Info().Int("next run in hours", config.RunIntervalHours).Msg("Finished restaking. Sleeping until next round")
 			time.Sleep(runInterval)
 		}
 	},
@@ -146,6 +146,7 @@ func init() {
 
 	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "~/.restake/config.yml", "A path to the configuration file")
 	startCmd.Flags().Float64VarP(&gasMultiplier, "gas-multiplier", "g", 1.2, "The multiplier to use for gas")
+	startCmd.Flags().BoolVarP(&debug, "debug", "d", false, "whether to enable debug logging")
 }
 
 func printResults(results RestakeResults, log *log.Logger) {

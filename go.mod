@@ -2,30 +2,14 @@ module github.com/tessellated-io/restake-go
 
 go 1.20
 
-// Below are the long-lived replace of the Cosmos SDK
-replace (
-	// use cosmos fork of keyring
-	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
-	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.37.0
-	github.com/cosmos/iavl => github.com/cosmos/iavl v0.20.0
-
-	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
-	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2
-
-	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
-	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
-
-	// Downgraded to avoid bugs in following commits which caused simulations to fail.
-	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-)
-
 require (
 	github.com/avast/retry-go/v4 v4.5.0
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cosmos/cosmos-sdk v0.47.5
 	github.com/evmos/evmos/v14 v14.0.0
+	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
-	github.com/tessellated-io/pickaxe v1.0.2
+	github.com/tessellated-io/pickaxe v1.0.3
 	github.com/tessellated-io/router v0.0.2
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -118,7 +102,6 @@ require (
 	github.com/prometheus/procfs v0.11.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
-	github.com/rs/zerolog v1.30.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	github.com/spf13/afero v1.9.5 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
@@ -153,4 +136,21 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pgregory.net/rapid v0.5.5 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
+)
+
+// Below are the long-lived replace of the Cosmos SDK
+replace (
+	// use cosmos fork of keyring
+	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
+	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.37.0
+	github.com/cosmos/iavl => github.com/cosmos/iavl v0.20.0
+
+	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
+	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2
+
+	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
+	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
+
+	// Downgraded to avoid bugs in following commits which caused simulations to fail.
+	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 )

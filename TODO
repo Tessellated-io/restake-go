@@ -1,21 +1,6 @@
-GAS
-- health is only off by one
-
 DOCS
 - header + credits  (ascii art)
 - README + branding
-- Add memo for restake go
-
-GENERAL 
-- min restake amount in mine
-- Reap panics
-- configure restake time
-- Fix default config parsing
-- healthchecks only on success pings or obvious failures? 
-
-- move towards debug log statements
-
-- make auto refreshes work
-- Support min amounts?
-- cleanup logging
 - logging header
+
+- Add memo for restake go (must verify)
