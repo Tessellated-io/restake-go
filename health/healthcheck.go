@@ -40,7 +40,7 @@ func (hm *HealthCheckClient) Success(message string) error {
 }
 
 func (hm *HealthCheckClient) Failed(err error) error {
-	hm.log.Error().Err(err).Str("network", hm.network).Msg("❤️‍🩹  Health failed")
+	hm.log.Error().Err(err).Str("network", hm.network).Msg("❤️\u200d🩹  Health failed")
 
 	return hm.ping(Fail, err.Error())
 }

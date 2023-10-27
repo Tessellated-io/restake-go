@@ -11,6 +11,7 @@ import (
 	"time"
 
 	os2 "github.com/cometbft/cometbft/libs/os"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	pconfig "github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/pickaxe/log"
@@ -56,7 +57,11 @@ var startCmd = &cobra.Command{
 		fmt.Println("")
 
 		// Configure a logger
-		log := log.NewLogger()
+		logLevel := zerolog.InfoLevel
+		if debug {
+			logLevel = zerolog.DebugLevel
+		}
+		log := log.NewLogger(logLevel)
 
 		// Load config
 		expandedConfigFile := pconfig.NormalizeConfigFile(configFile)
