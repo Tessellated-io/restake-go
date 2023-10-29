@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/tessellated-io/pickaxe/log"
+	"github.com/tessellated-io/pickaxe/util"
 	"github.com/tessellated-io/restake-go/registry"
 	"github.com/tessellated-io/router/router"
-	"github.com/tessellated-io/pickaxe/util"
 )
 
 func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*RestakeConfig, error) {
