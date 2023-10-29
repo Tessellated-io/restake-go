@@ -2,13 +2,11 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/tessellated-io/pickaxe/log"
+	"github.com/tessellated-io/pickaxe/util"
 	"github.com/tessellated-io/restake-go/registry"
 	"github.com/tessellated-io/router/router"
 )
@@ -133,7 +131,7 @@ func newChainConfig(
 	gasPrice := feeToken.FixedMinGasPrice
 
 	// Convert the minimum reward into a big int
-	minimumReward, err := numberToBigInt(config.RestakeInfo.Restake.MinimumReward)
+	minimumReward, err := util.NumberToBigInt(config.RestakeInfo.Restake.MinimumReward)
 	if err != nil {
 		return nil, err
 	}
@@ -160,14 +158,4 @@ func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.Fee
 		}
 	}
 	return nil, fmt.Errorf("failed to find a fee token for %s in the registry response", needle)
-}
-
-func numberToBigInt(num json.Number) (*big.Int, error) {
-	if _, err := strconv.Atoi(string(num)); err == nil {
-		n := new(big.Int)
-		n.SetString(string(num), 10)
-		return n, nil
-	} else {
-		return nil, fmt.Errorf("unexpected floating point value for min rewards: %s", num)
-	}
 }
