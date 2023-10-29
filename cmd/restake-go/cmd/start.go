@@ -14,12 +14,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	pconfig "github.com/tessellated-io/pickaxe/config"
+	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/restake-go/codec"
 	"github.com/tessellated-io/restake-go/config"
 	"github.com/tessellated-io/restake-go/health"
 	"github.com/tessellated-io/restake-go/restake"
-	"github.com/tessellated-io/restake-go/rpc"
 )
 
 var (
@@ -85,7 +85,7 @@ var startCmd = &cobra.Command{
 		for _, chain := range config.Chains {
 			prefixedLogger := log.ApplyPrefix(fmt.Sprintf(" [%s]", chain.Network()))
 
-			rpcClient, err := rpc.NewRpcClient(chain.ChainGrpcURI(), cdc, prefixedLogger)
+			rpcClient, err := rpc.NewGRpcClient(chain.ChainGrpcURI(), cdc, prefixedLogger)
 			if err != nil {
 				panic(err)
 			}
