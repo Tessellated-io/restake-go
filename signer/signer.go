@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/pickaxe/log"
-	"github.com/tessellated-io/restake-go/rpc"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	cosmostx "github.com/cosmos/cosmos-sdk/client/tx"
