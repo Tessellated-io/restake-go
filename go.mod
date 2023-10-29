@@ -9,7 +9,7 @@ require (
 	github.com/evmos/evmos/v14 v14.0.0
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
-	github.com/tessellated-io/pickaxe v1.0.4
+	github.com/tessellated-io/pickaxe v1.0.6
 	github.com/tessellated-io/router v0.0.2
 	gopkg.in/yaml.v2 v2.4.0
 )
