@@ -1,6 +1,9 @@
 package config
 
-import "github.com/tessellated-io/restake-go/registry"
+import (
+	cregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
+	"github.com/tessellated-io/restake-go/registry"
+)
 
 // MergedConfig is a merged object of all configs are gathered in the configuration step, prior to creating the final Restake Config object
 type MergedConfig struct {
@@ -8,7 +11,7 @@ type MergedConfig struct {
 	*UserChainConfig
 
 	// Config from the Chain registry about a chain
-	*registry.ChainInfo
+	*cregistry.ChainInfo
 
 	// Config about Restake on the chain from the Restake registry
 	registry.RestakeInfo

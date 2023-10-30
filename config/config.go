@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	cregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
 	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/pickaxe/util"
 	"github.com/tessellated-io/restake-go/registry"
@@ -19,12 +20,16 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}
 
 	// Request network data for the validator
-	log.Info().Msg("Loading configs...")
+	log.Info().Msg("Loading configs from validator registry...")
 	registryClient := registry.NewRegistryClient()
 	restakeInfos, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
 	if err != nil {
 		return nil, err
 	}
+
+	// Create a client for the chain registry
+	log.Info().Msg("Loading chains from chain registry...")
+	chainRegistryClient := cregistry.NewRegistryClient()
 
 	// Loop through each restake chain, resolving the data
 	chainRouter, err := router.NewRouter(nil)
@@ -36,7 +41,7 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		log.Info().Str("network", restakeInfo.Name).Msg("Restake registry configuration found")
 
 		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
+		registryChainInfo, err := chainRegistryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +156,7 @@ func newChainConfig(
 	}, nil
 }
 
-func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.FeeToken, error) {
+func extractFeeToken(needle string, haystack []cregistry.FeeToken) (*cregistry.FeeToken, error) {
 	for _, candidate := range haystack {
 		if strings.EqualFold(candidate.Denom, needle) {
 			return &candidate, nil
