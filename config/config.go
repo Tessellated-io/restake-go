@@ -29,10 +29,7 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 
 	// Create a client for the chain registry
 	log.Info().Msg("Loading chains from chain registry...")
-	chainRegistryClient, err := cregistry.NewClient()
-	if err != nil {
-		return nil, err
-	}
+	chainRegistryClient := cregistry.NewRegistryClient()
 
 	// Loop through each restake chain, resolving the data
 	chainRouter, err := router.NewRouter(nil)
@@ -44,7 +41,7 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 		log.Info().Str("network", restakeInfo.Name).Msg("Restake registry configuration found")
 
 		// Fetch chain info
-		registryChainInfo, err := registryClient.GetChainInfo(ctx, restakeInfo.Name)
+		registryChainInfo, err := chainRegistryClient.GetChainInfo(ctx, restakeInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +156,7 @@ func newChainConfig(
 	}, nil
 }
 
-func extractFeeToken(needle string, haystack []registry.FeeToken) (*registry.FeeToken, error) {
+func extractFeeToken(needle string, haystack []cregistry.FeeToken) (*cregistry.FeeToken, error) {
 	for _, candidate := range haystack {
 		if strings.EqualFold(candidate.Denom, needle) {
 			return &candidate, nil
