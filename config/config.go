@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	cregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
 	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/pickaxe/util"
 	"github.com/tessellated-io/restake-go/registry"
@@ -19,9 +20,16 @@ func GetRestakeConfig(ctx context.Context, filename string, log *log.Logger) (*R
 	}
 
 	// Request network data for the validator
-	log.Info().Msg("Loading configs...")
+	log.Info().Msg("Loading configs from validator registry...")
 	registryClient := registry.NewRegistryClient()
 	restakeInfos, err := registryClient.GetRestakeChains(ctx, fileConfig.Moniker)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a client for the chain registry
+	log.Info().Msg("Loading chains from chain registry...")
+	chainRegistryClient, err := cregistry.NewClient()
 	if err != nil {
 		return nil, err
 	}

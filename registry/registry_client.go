@@ -43,36 +43,6 @@ func (rc *RegistryClient) GetRestakeChains(ctx context.Context, targetValidator 
 	return validChains, nil
 }
 
-func (rc *RegistryClient) GetChainInfo(ctx context.Context, chainName string) (*ChainInfo, error) {
-	var chainInfo *ChainInfo
-	var err error
-
-	err = retry.Do(func() error {
-		chainInfo, err = rc.getChainInfo(ctx, chainName)
-		return err
-	}, rc.delay, rc.attempts, retry.Context(ctx))
-	if err != nil {
-		err = errors.Unwrap(err)
-	}
-
-	return chainInfo, err
-}
-
-// Internal method without retries
-func (rc *RegistryClient) getChainInfo(ctx context.Context, chainName string) (*ChainInfo, error) {
-	url := fmt.Sprintf("https://proxy.atomscan.com/directory/%s/chain.json", chainName)
-	bytes, err := rc.makeRequest(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
-	chainInfo, err := parseChainResponse(bytes)
-	if err != nil {
-		return nil, err
-	}
-	return chainInfo, nil
-}
-
 func (rc *RegistryClient) extractValidator(targetValidator string, validators []Validator) (*Validator, error) {
 	for _, validator := range validators {
 		if strings.EqualFold(targetValidator, validator.Name) {
