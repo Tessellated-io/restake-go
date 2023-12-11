@@ -4,3 +4,6 @@ DOCS
 - logging header
 
 - Add memo for restake go (must verify)
+
+
+// Spearate RPC into two libs: rpc and retryable rpc

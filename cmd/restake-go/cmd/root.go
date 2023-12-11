@@ -7,7 +7,13 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/tessellated-io/pickaxe/log"
 )
+
+const fileRouterConfigFilename = "chains.yaml"
+
+var logger *log.Logger
+var configurationDirectory string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -28,4 +34,13 @@ func Execute() {
 }
 
 func init() {
+	var rawLogLevel string
+
+	rootCmd.PersistentFlags().StringVarP(&configurationDirectory, "config-directory", "c", "~/.restake", "Where to store Restake-Go's configuration")
+	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "info", "Logging level")
+
+	// Get a logger
+	logLevel := log.ParseLogLevel(rawLogLevel)
+	logger = log.NewLogger(logLevel)
+	// logger = logger.ApplyPrefix(" restake")
 }

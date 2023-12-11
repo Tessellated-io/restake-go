@@ -4,41 +4,15 @@ Copyright © 2023 Tessellated <tessellated.io>
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"sort"
-	"sync"
-	"time"
 
-	os2 "github.com/cometbft/cometbft/libs/os"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	pconfig "github.com/tessellated-io/pickaxe/config"
-	"github.com/tessellated-io/pickaxe/cosmos/rpc"
-	"github.com/tessellated-io/pickaxe/log"
-	"github.com/tessellated-io/restake-go/codec"
-	"github.com/tessellated-io/restake-go/config"
-	"github.com/tessellated-io/restake-go/health"
+	"github.com/tessellated-io/pickaxe/cosmos/tx"
 	"github.com/tessellated-io/restake-go/restake"
+	filerouter "github.com/tessellated-io/router/file"
 )
 
-var (
-	configFile    string
-	gasMultiplier float64
-	debug         bool
-)
-
-type RestakeResult struct {
-	network string
-	txHash  string
-	err     error
-}
-
-type RestakeResults []*RestakeResult
-
-func (rr RestakeResults) Len() int           { return len(rr) }
-func (rr RestakeResults) Swap(i, j int)      { rr[i], rr[j] = rr[j], rr[i] }
-func (rr RestakeResults) Less(i, j int) bool { return rr[i].network < rr[j].network }
+var ()
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
@@ -46,8 +20,6 @@ var startCmd = &cobra.Command{
 	Short: "Start the Restake Service",
 	Long:  `Starts the Restake Service with the given configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := cmd.Context()
-
 		fmt.Println()
 		fmt.Println("============================================================")
 		fmt.Println("Restake Go")
@@ -56,113 +28,47 @@ var startCmd = &cobra.Command{
 		fmt.Println("============================================================")
 		fmt.Println("")
 
-		// Configure a logger
-		logLevel := zerolog.InfoLevel
-		if debug {
-			logLevel = zerolog.DebugLevel
-		}
-		log := log.NewLogger(logLevel)
+		ctx := cmd.Context()
 
-		// Load config
-		expandedConfigFile := pconfig.NormalizeConfigFile(configFile)
-		configOk := os2.FileExists(expandedConfigFile)
-		if !configOk {
-			panic(fmt.Sprintf("Failed to load config file at: %s", configFile))
-		}
-		log.Info().Str("config file", expandedConfigFile).Msg("Loading config from file")
-
-		// Parse config
-		config, err := config.GetRestakeConfig(ctx, expandedConfigFile, log)
+		// Configuration loader
+		configurationLoader, err := restake.NewConfigurationLoader()
 		if err != nil {
-			panic(err)
+			logger.Error().Err(err).Msg("unable to create a configuration loader")
+			return
 		}
 
-		cdc := codec.GetCodec()
-
-		// Make restake clients
-		restakeManagers := []*restake.RestakeManager{}
-		healthClients := []*health.HealthCheckClient{}
-		for _, chain := range config.Chains {
-			prefixedLogger := log.ApplyPrefix(fmt.Sprintf(" [%s]", chain.Network()))
-
-			rpcClient, err := rpc.NewGRpcClient(chain.ChainGrpcURI(), cdc, prefixedLogger)
-			if err != nil {
-				panic(err)
-			}
-
-			healthcheckId := chain.HealthcheckId
-			if healthcheckId == "" {
-				panic(fmt.Sprintf("no health check id found for network %s", chain.Network()))
-			}
-			healthClient := health.NewHealthCheckClient(chain.Network(), healthcheckId, prefixedLogger)
-			healthClients = append(healthClients, healthClient)
-
-			restakeManager, err := restake.NewRestakeManager(rpcClient, cdc, config.Mnemonic, config.Memo, RestakeVersion, gasMultiplier, *chain, prefixedLogger)
-			if err != nil {
-				panic(err)
-			}
-			restakeManagers = append(restakeManagers, restakeManager)
+		// Create Gas Manager
+		gasPriceProvider, err := tx.NewInMemoryGasProvider()
+		if err != nil {
+			logger.Error().Err(err).Msg("unable to create a gas price provider")
+			return
+		}
+		gasManager, err := tx.NewDefaultGasManager(0.01, gasPriceProvider, logger)
+		if err != nil {
+			logger.Error().Err(err).Msg("unable to create a gas manager")
+			return
 		}
 
-		runInterval := time.Duration(config.RunIntervalHours) * time.Hour
-		for {
-			var wg sync.WaitGroup
-			var results RestakeResults = []*RestakeResult{}
-
-			for idx, restakeManager := range restakeManagers {
-				wg.Add(1)
-
-				go func(ctx context.Context, restakeManager *restake.RestakeManager, healthClient *health.HealthCheckClient) {
-					defer wg.Done()
-
-					timeoutContext, cancelFunc := context.WithTimeout(ctx, runInterval)
-					defer cancelFunc()
-
-					txHash, err := restakeManager.Restake(timeoutContext)
-					if err != nil {
-						_ = healthClient.Failed(err)
-					} else {
-						_ = healthClient.Success("Hooray!")
-					}
-
-					result := &RestakeResult{
-						network: restakeManager.Network(),
-						txHash:  txHash,
-						err:     err,
-					}
-					results = append(results, result)
-				}(ctx, restakeManager, healthClients[idx])
-			}
-
-			// Print results whenever they all finish
-			go func() {
-				wg.Wait()
-				printResults(results, log)
-			}()
-
-			log.Info().Int("next run in hours", config.RunIntervalHours).Msg("Finished restaking. Sleeping until next round")
-			time.Sleep(runInterval)
+		// Create a file based router.
+		fileRouterConfig := fmt.Sprintf("%s/%s", configurationDirectory, fileRouterConfigFilename)
+		router, err := filerouter.NewRouter(fileRouterConfig)
+		if err != nil {
+			logger.Error().Err(err).Msg("unable to create a chain router")
+			return
 		}
+
+		// Bundle up a Restake Manager
+		restakeManager, err := restake.NewRestakeManager(configurationLoader, logger, router, gasManager)
+		if err != nil {
+			logger.Error().Err(err).Msg("unable to create a restake manager")
+			return
+		}
+
+		// Run!
+		restakeManager.Start(ctx)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-
-	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "~/.restake/config.yml", "A path to the configuration file")
-	startCmd.Flags().Float64VarP(&gasMultiplier, "gas-multiplier", "g", 1.2, "The multiplier to use for gas")
-	startCmd.Flags().BoolVarP(&debug, "debug", "d", false, "whether to enable debug logging")
-}
-
-func printResults(results RestakeResults, log *log.Logger) {
-	sort.Sort(results)
-
-	log.Info().Msg("Restake Results:")
-	for _, result := range results {
-		if result.err == nil {
-			log.Info().Str("tx_hash", result.txHash).Msg(fmt.Sprintf("✅ %s: Success", result.network))
-		} else {
-			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
-		}
-	}
 }
