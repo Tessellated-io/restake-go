@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/healthchecks v0.0.1
 	github.com/tessellated-io/pickaxe v1.0.14
-	github.com/tessellated-io/router v0.0.2
+	github.com/tessellated-io/router v0.0.4
 )
 
 require (
