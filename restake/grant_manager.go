@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/tessellated-io/pickaxe/arrays"
+	"github.com/tessellated-io/pickaxe/cosmos/rpc"
+	"github.com/tessellated-io/pickaxe/log"
+
 	"cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
-	"github.com/tessellated-io/pickaxe/arrays"
-	"github.com/tessellated-io/pickaxe/cosmos/rpc"
-	"github.com/tessellated-io/pickaxe/log"
 )
 
 // restakeDelegator defines data about a restake delegator using Restake
@@ -29,7 +30,7 @@ type grantManager struct {
 	validatorAddress string
 }
 
-func NewGrantManager(botAddress string, chainID string, logger *log.Logger, rpcClient rpc.RpcClient, validatorAddress string) (*grantManager, error) {
+func NewGrantManager(botAddress, chainID string, logger *log.Logger, rpcClient rpc.RpcClient, validatorAddress string) (*grantManager, error) {
 	return &grantManager{
 		botAddress: botAddress,
 		logger:     logger,

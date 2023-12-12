@@ -12,8 +12,10 @@ import (
 
 const fileRouterConfigFilename = "chains.yaml"
 
-var logger *log.Logger
-var configurationDirectory string
+var (
+	logger                 *log.Logger
+	configurationDirectory string
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{

@@ -20,6 +20,7 @@ type Configuration struct {
 	NetworkRetryAttempts     uint     `yaml:"network_retry_attempts" comment:"How many attempts to retry due to network errors before failing."`
 	DisableHealthChecks      bool     `yaml:"disable_health_checks" comment:"Whether status should be reported to healthchecks.io"`
 	RunIntervalSeconds       uint     `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
+	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
 }
 
 func (c *Configuration) VersionedMemo(version string) string {
@@ -39,8 +40,7 @@ func (c *Configuration) TxPollDelay() time.Duration {
 }
 
 // configurationLoader loads configuration
-type configurationLoader struct {
-}
+type configurationLoader struct{}
 
 func NewConfigurationLoader() (*configurationLoader, error) {
 	loader := &configurationLoader{}

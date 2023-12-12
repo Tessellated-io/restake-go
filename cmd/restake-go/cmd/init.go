@@ -20,13 +20,17 @@ var initCmd = &cobra.Command{
 		logger.Info().Str("configuration_directory", configurationDirectory).Msg("initializing restake-go configuration")
 
 		// Create folder if needed
-		config.CreateDirectoryIfNeeded(configurationDirectory, logger)
+		err := config.CreateDirectoryIfNeeded(configurationDirectory, logger)
+		if err != nil {
+			logger.Error().Err(err).Msg("error writing file")
+			return
+		}
 
 		// Write Restake configuration
 		restakeConfigFile := fmt.Sprintf("%s/%s", configurationDirectory, restake.RestakeConfigFilename)
 		header := "This is the configuration file for Restake"
 		restakeConfig := restake.Configuration{}
-		err := config.WriteYamlWithComments(restakeConfig, header, restakeConfigFile, logger)
+		err = config.WriteYamlWithComments(restakeConfig, header, restakeConfigFile, logger)
 		if err != nil {
 			logger.Error().Err(err).Msg("error writing file")
 			return
@@ -39,7 +43,6 @@ var initCmd = &cobra.Command{
 			return
 		}
 		logger.Info().Str("configuration_directory", configurationDirectory).Msg("finished initializing configuration for restake-go")
-
 	},
 }
 

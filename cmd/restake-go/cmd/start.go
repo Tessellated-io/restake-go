@@ -12,8 +12,6 @@ import (
 	filerouter "github.com/tessellated-io/router/file"
 )
 
-var ()
-
 // startCmd represents the start command
 var startCmd = &cobra.Command{
 	Use:   "start",
@@ -38,7 +36,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Create Gas Manager
-		gasPriceProvider, err := tx.NewInMemoryGasProvider()
+		gasPriceProvider, err := tx.NewInMemoryGasPriceProvider()
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a gas price provider")
 			return
@@ -58,7 +56,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Bundle up a Restake Manager
-		restakeManager, err := restake.NewRestakeManager(configurationLoader, logger, router, gasManager)
+		restakeManager, err := restake.NewRestakeManager(RestakeVersion, configurationLoader, logger, router, gasManager)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a restake manager")
 			return

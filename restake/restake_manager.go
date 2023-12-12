@@ -8,20 +8,24 @@ import (
 	"sync"
 	"time"
 
-	"cosmossdk.io/math"
+	"github.com/rs/zerolog"
 	"github.com/tessellated-io/healthchecks/health"
+	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
+	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
+	"github.com/tessellated-io/pickaxe/log"
+	routertypes "github.com/tessellated-io/router/types"
+
+	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	txauth "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
-	"github.com/tessellated-io/pickaxe/cosmos/rpc"
-	"github.com/tessellated-io/pickaxe/log"
-	routertypes "github.com/tessellated-io/router/types"
 )
 
-var wg sync.WaitGroup
-var results RestakeResults = []*RestakeResult{}
+var (
+	wg      sync.WaitGroup
+	results RestakeResults = []*RestakeResult{}
+)
 
 // A restake client runs restake clients based on configurations in the Restake registry.
 type RestakeManager struct {
@@ -77,7 +81,7 @@ func (rm *RestakeManager) Start(ctx context.Context) {
 		}
 
 		if firstRunCompleted {
-			time.Sleep(localConfiguration.RunEvery())
+			time.Sleep(localConfiguration.RunInterval())
 		} else {
 			firstRunCompleted = true
 		}
@@ -116,6 +120,7 @@ func (rm *RestakeManager) Start(ctx context.Context) {
 			wg.Add(1)
 
 			go rm.runRestakeForNetwork(
+				ctx,
 				localConfiguration,
 				restakeChain,
 				chainRegistryClient,
@@ -140,7 +145,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	defer cancelFunc()
 
 	// Results from the run
-	var txHash string
+	var txHashes []string
 	var err error
 
 	defer func() {
@@ -163,9 +168,9 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 		// Add results
 		result := &RestakeResult{
-			network: restakeChain.Name,
-			txHash:  txHash,
-			err:     err,
+			network:  restakeChain.Name,
+			txHashes: txHashes,
+			err:      err,
 		}
 		results = append(results, result)
 
@@ -263,12 +268,15 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		chainID,
 		feeDenom,
 		stakingDenom,
+		localConfiguration.BatchSize,
 		validatorAddress,
 		botAddress,
 		minimumRequiredReward,
 		minimumRequiredBotBalance,
 		localConfiguration.TxPollDelay(),
 		localConfiguration.TxPollAttempts,
+		localConfiguration.NetworkRetryDelay(),
+		localConfiguration.NetworkRetryAttempts,
 		rm.gasManager,
 		grantManager,
 		txProvider,
@@ -281,14 +289,14 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		return
 	}
 
-	txHash, err = restakeClient.Run(timeoutContext)
+	txHashes, err = restakeClient.restake(timeoutContext)
 }
 
 // Results of running Restake on a given network
 type RestakeResult struct {
-	network string
-	txHash  string
-	err     error
+	network  string
+	txHashes []string
+	err      error
 }
 
 type RestakeResults []*RestakeResult
@@ -303,7 +311,12 @@ func printResults(results RestakeResults, log *log.Logger) {
 	log.Info().Msg("Restake Results:")
 	for _, result := range results {
 		if result.err == nil {
-			log.Info().Str("tx_hash", result.txHash).Msg(fmt.Sprintf("✅ %s: Success", result.network))
+			txHashes := zerolog.Arr()
+			for _, txHash := range result.txHashes {
+				txHashes.Str(txHash)
+			}
+
+			log.Info().Array("tx_hashes", txHashes).Msg(fmt.Sprintf("✅ %s: Success", result.network))
 		} else {
 			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
 		}

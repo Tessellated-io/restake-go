@@ -6,9 +6,10 @@ require (
 	cosmossdk.io/math v1.1.2
 	github.com/cosmos/cosmos-sdk v0.47.5
 	github.com/evmos/evmos/v14 v14.0.0
+	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/healthchecks v0.0.1
-	github.com/tessellated-io/pickaxe v1.0.13
+	github.com/tessellated-io/pickaxe v1.0.14
 	github.com/tessellated-io/router v0.0.2
 )
 
@@ -101,7 +102,6 @@ require (
 	github.com/prometheus/procfs v0.11.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
-	github.com/rs/zerolog v1.30.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	github.com/spf13/afero v1.9.5 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
@@ -154,7 +154,4 @@ replace (
 
 	// Downgraded to avoid bugs in following commits which caused simulations to fail.
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-
-	github.com/tessellated-io/pickaxe => ../pickaxe
-	github.com/tessellated-io/router => ../router
 )
