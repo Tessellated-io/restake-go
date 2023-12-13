@@ -74,6 +74,8 @@ func NewRestakeClient(
 	networkRetryDelay time.Duration,
 	networkRetryAttempts uint,
 
+	broadcaster tx.Broadcaster
+
 	gasManager tx.GasManager,
 	grantManager *grantManager,
 	txProvider tx.TxProvider,
@@ -142,17 +144,17 @@ func (rc *restakeClient) restake(ctx context.Context) ([]string, error) {
 	// 4. Send in batches
 	txHashes := []string{}
 	for batchNum, batch := range batches {
-		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("sending a batch of messages")
+		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📬 sending a batch of messages")
 
-		txHash, err := rc.sendBatchWithRetries(ctx, batch)
+		txHash, err := rc.broadcaster.SignAndBroadcast(ctx, []sdk.Msg{batch})
 		if err != nil {
 			return nil, err
 		}
 		txHashes = append(txHashes, txHash)
-		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("batch sent successfully")
+		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📭 batch sent successfully")
 	}
 
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("successfully restaked")
+	rc.logger.Info().Str("chain_id", rc.chainID).Msg("🙌 successfully restaked")
 	return txHashes, nil
 }
 
@@ -163,6 +165,11 @@ func (rc *restakeClient) sendBatchWithRetries(ctx context.Context, batch sdk.Msg
 
 	var i uint
 	for i = 0; i < rc.networkRetryAttempts; i++ {
+		// Return early if the context has expired
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+
 		txHash, err = rc.sendBatch(ctx, batch)
 		if err == nil {
 			return txHash, err
@@ -192,7 +199,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 		return "", err
 	}
 
-	signedMessage, err := rc.txProvider.ProvideTx(ctx, gasPrice, []sdk.Msg{batch}, signingMetadata)
+	signedMessage, gasWanted, err := rc.txProvider.ProvideTx(ctx, gasPrice, []sdk.Msg{batch}, signingMetadata)
 	if err != nil {
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to generate restake messages")
 		return "", err
@@ -200,22 +207,40 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 	rc.logger.Debug().Str("chain_id", rc.chainID).Msg("signed transaction")
 
 	// Broadcast and update the gas
-	broadcastResult, err := rc.rpcClient.Broadcast(ctx, signedMessage)
-	if err != nil {
-		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
-		return "", err
+	broadcastResult, broadcastErr := rc.rpcClient.Broadcast(ctx, signedMessage)
+
+	// Not what you would expect. Some chains, for instance, Agoric, will return an error *AND* a broadcast result.
+	// To work around this
+	// 1. always try to manage a non-nil broadcast result for gas.
+	//		a. Always print any information we got about the broadcast
+	//		b. Print any errors about gas management, but don't return it. These errors are non-fatal error
+	// 2. ditch if error is non-nil, since it didn't broadacst
+	// 3. ditch if code is non-zero, since that also symbolizes it didn't broadcast. Turn the rawlogs into an error in this case
+	if broadcastResult != nil {
+		txHash := broadcastResult.TxResponse.TxHash
+		codespace := broadcastResult.TxResponse.Codespace
+		broadcastResponseCode := broadcastResult.TxResponse.Code
+		logs := broadcastResult.TxResponse.RawLog
+		rc.logger.Info().Str("chain_id", rc.chainID).Str("tx_hash", txHash).Uint32("code", broadcastResponseCode).Str("codespace", codespace).Str("logs", logs).Msg("📣 attempted to broadcast restake transaction")
+
+		err = rc.gasManager.ManageBroadcastResult(ctx, rc.chainName, broadcastResult, gasWanted)
+		if err != nil {
+			rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
+		}
 	}
-	err = rc.gasManager.ManageBroadcastResult(ctx, rc.chainName, broadcastResult)
-	if err != nil {
-		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
-		return "", err
+
+	// 2.
+	if broadcastErr != nil {
+		rc.logger.Error().Err(broadcastErr).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
+		return "", broadcastErr
 	}
+
+	// 3.
+	// NOTE: Presume that if `broadcastErr` is nil (check #2) then broadcastResult is populated. There's fancier and more succinct
+	//			 ways to write this code, but the code loses readability fast.
 	txHash := broadcastResult.TxResponse.TxHash
 	broadcastResponseCode := broadcastResult.TxResponse.Code
 	logs := broadcastResult.TxResponse.RawLog
-	rc.logger.Info().Str("chain_id", rc.chainID).Str("tx_hash", txHash).Uint32("code", broadcastResponseCode).Str("logs", logs).Msg("broadcasted restake transaction")
-
-	// Ditch if the initial code was not success
 	if broadcastResponseCode != 0 {
 		return "", fmt.Errorf(logs)
 	}
@@ -223,6 +248,11 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 	// Poll for tx inclusion
 	var pollAttempt uint
 	for pollAttempt = 0; pollAttempt < rc.txPollAttempts; pollAttempt++ {
+		// Return early if the context has expired
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+
 		// Sleep. Do this first so the tx has some time to settle.
 		time.Sleep(rc.txPollDelay)
 
@@ -235,7 +265,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 
 		// Return success if included
 		if included {
-			rc.logger.Info().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Msg("found included transaction")
+			rc.logger.Info().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Msg("🔍 found included transaction")
 
 			err := rc.gasManager.ManageInclusionResult(ctx, rc.chainName, true)
 			if err != nil {
@@ -246,7 +276,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 			return txHash, nil
 		}
 
-		rc.logger.Info().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Uint("attempt", pollAttempt).Uint("poll_attempts", rc.txPollAttempts).Msg("still waiting for inclusion")
+		rc.logger.Info().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Uint("attempt", pollAttempt).Uint("poll_attempts", rc.txPollAttempts).Msg("⌛ still waiting for inclusion")
 	}
 
 	// Create and log an error

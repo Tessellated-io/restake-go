@@ -11,6 +11,7 @@ require (
 	github.com/tessellated-io/healthchecks v0.0.1
 	github.com/tessellated-io/pickaxe v1.0.14
 	github.com/tessellated-io/router v0.0.2
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -133,7 +134,6 @@ require (
 	google.golang.org/grpc v1.56.2 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pgregory.net/rapid v0.5.5 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
@@ -154,7 +154,9 @@ replace (
 
 	// Downgraded to avoid bugs in following commits which caused simulations to fail.
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
+	github.com/tesselalted-io/healthchecks => ../healthchecks
 
+	// TODO
 	github.com/tessellated-io/pickaxe => ../pickaxe
 	github.com/tessellated-io/router => ../router
 )

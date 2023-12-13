@@ -264,9 +264,17 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	var minimumRequiredReward math.LegacyDec
-	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
+	// TODO
+	minimumRequiredReward, err = math.LegacyNewDecFromStr("1")
+	// minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
+		return
+	}
+
+	var feeDenom string
+	feeDenom, err = chainInfo.FeeDenom()
+	if err != nil {
 		return
 	}
 
@@ -299,9 +307,16 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		return
 	}
 
+	// Fetch the asset list for the chain
+	var assetList *chainregistry.AssetList
+	assetList, err = chainRegistryClient.AssetList(ctx, restakeChain.Name)
+	if err != nil {
+		return
+	}
+
 	// Set minimum bot balance to be 1 fee token.
 	var minimumRequiredBotBalance *sdk.Coin
-	minimumRequiredBotBalance, err = chainInfo.OneFeeToken(ctx, rpcClient)
+	minimumRequiredBotBalance, err = assetList.OneToken(feeDenom)
 	if err != nil {
 		return
 	}
@@ -314,12 +329,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	// Create a tx provider
-	var feeDenom string
-	feeDenom, err = chainInfo.FeeDenom()
-	if err != nil {
-		return
-	}
-
 	slip44 := uint(chainInfo.Slip44)
 	var signer crypto.BytesSigner
 	signer, err = tx.GetSoftSigner(slip44, localConfiguration.BotMnemonic)

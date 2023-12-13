@@ -41,7 +41,7 @@ var startCmd = &cobra.Command{
 			logger.Error().Err(err).Msg("unable to create a gas price provider")
 			return
 		}
-		gasManager, err := tx.NewDefaultGasManager(0.01, gasPriceProvider, logger, nil)
+		gasManager, err := tx.NewDefaultGasManager(0.001, gasPriceProvider, logger, nil)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a gas manager")
 			return

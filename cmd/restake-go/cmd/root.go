@@ -40,8 +40,9 @@ func init() {
 	var rawLogLevel string
 
 	rootCmd.PersistentFlags().StringVarP(&configurationDirectory, "config-directory", "c", "~/.restake", "Where to store Restake-Go's configuration")
-	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "debug", "Logging level")
+	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "info", "Logging level")
 
+	// TODO
 	fmt.Println(rawLogLevel)
 
 	// Get a logger
