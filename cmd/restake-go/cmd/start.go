@@ -29,7 +29,7 @@ var startCmd = &cobra.Command{
 		ctx := cmd.Context()
 
 		// Configuration loader
-		configurationLoader, err := restake.NewConfigurationLoader()
+		configurationLoader, err := restake.NewConfigurationLoader(configurationDirectory)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a configuration loader")
 			return
@@ -41,7 +41,7 @@ var startCmd = &cobra.Command{
 			logger.Error().Err(err).Msg("unable to create a gas price provider")
 			return
 		}
-		gasManager, err := tx.NewDefaultGasManager(0.01, gasPriceProvider, logger)
+		gasManager, err := tx.NewDefaultGasManager(0.01, gasPriceProvider, logger, nil)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a gas manager")
 			return
@@ -56,7 +56,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// Bundle up a Restake Manager
-		restakeManager, err := restake.NewRestakeManager(RestakeVersion, configurationLoader, logger, router, gasManager)
+		restakeManager, err := restake.NewRestakeManager(RestakeVersion, configurationLoader, logger, router, gasManager, true)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a restake manager")
 			return

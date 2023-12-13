@@ -4,6 +4,7 @@ Copyright © 2023 Tessellated <tessellated.io>
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -39,10 +40,14 @@ func init() {
 	var rawLogLevel string
 
 	rootCmd.PersistentFlags().StringVarP(&configurationDirectory, "config-directory", "c", "~/.restake", "Where to store Restake-Go's configuration")
-	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "info", "Logging level")
+	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "debug", "Logging level")
+
+	fmt.Println(rawLogLevel)
 
 	// Get a logger
 	logLevel := log.ParseLogLevel(rawLogLevel)
+
+	fmt.Println(logLevel)
 	logger = log.NewLogger(logLevel)
 	// logger = logger.ApplyPrefix(" restake")
 }

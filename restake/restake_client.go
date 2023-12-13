@@ -24,6 +24,7 @@ import (
 type restakeClient struct {
 	// Chain specific information
 	chainID       string
+	chainName     string
 	addressPrefix string
 	feeDenom      string
 	stakingDenom  string
@@ -58,6 +59,7 @@ type restakeClient struct {
 func NewRestakeClient(
 	addressPrefix string,
 	chainID string,
+	chainName string,
 	feeDenom string,
 	stakingDenom string,
 
@@ -85,6 +87,7 @@ func NewRestakeClient(
 	return &restakeClient{
 		addressPrefix: addressPrefix,
 		chainID:       chainID,
+		chainName:     chainName,
 		feeDenom:      feeDenom,
 		stakingDenom:  stakingDenom,
 
@@ -177,14 +180,14 @@ func (rc *restakeClient) sendBatchWithRetries(ctx context.Context, batch sdk.Msg
 
 func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, error) {
 	// Sign the message
-	gasPrice, err := rc.gasManager.GetGasPrice(ctx, rc.chainID)
+	gasPrice, err := rc.gasManager.GetGasPrice(ctx, rc.chainName)
 	if err != nil {
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to get gas price")
 		return "", err
 	}
 
 	signingMetadata, err := rc.signingMetadataProvider.SigningMetadataForAccount(ctx, rc.botAddress)
-	if signingMetadata != nil {
+	if err != nil {
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to get signing metadata for bot")
 		return "", err
 	}
@@ -194,6 +197,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to generate restake messages")
 		return "", err
 	}
+	rc.logger.Debug().Str("chain_id", rc.chainID).Msg("signed transaction")
 
 	// Broadcast and update the gas
 	broadcastResult, err := rc.rpcClient.Broadcast(ctx, signedMessage)
@@ -201,13 +205,20 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
 		return "", err
 	}
-	err = rc.gasManager.ManageBroadcastResult(ctx, rc.chainID, broadcastResult)
+	err = rc.gasManager.ManageBroadcastResult(ctx, rc.chainName, broadcastResult)
 	if err != nil {
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for broadcast result")
 		return "", err
 	}
 	txHash := broadcastResult.TxResponse.TxHash
-	rc.logger.Info().Str("chain_id", rc.chainID).Str("tx_hash", txHash).Uint32("code", broadcastResult.TxResponse.Code).Str("logs", broadcastResult.TxResponse.RawLog).Msg("broadcasted restake transaction")
+	broadcastResponseCode := broadcastResult.TxResponse.Code
+	logs := broadcastResult.TxResponse.RawLog
+	rc.logger.Info().Str("chain_id", rc.chainID).Str("tx_hash", txHash).Uint32("code", broadcastResponseCode).Str("logs", logs).Msg("broadcasted restake transaction")
+
+	// Ditch if the initial code was not success
+	if broadcastResponseCode != 0 {
+		return "", fmt.Errorf(logs)
+	}
 
 	// Poll for tx inclusion
 	var pollAttempt uint
@@ -226,7 +237,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 		if included {
 			rc.logger.Info().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Msg("found included transaction")
 
-			err := rc.gasManager.ManageInclusionResult(ctx, rc.chainID, true)
+			err := rc.gasManager.ManageInclusionResult(ctx, rc.chainName, true)
 			if err != nil {
 				rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for tx inclusion")
 			}
@@ -240,7 +251,7 @@ func (rc *restakeClient) sendBatch(ctx context.Context, batch sdk.Msg) (string, 
 
 	// Create and log an error
 	rc.logger.Error().Str("tx_hash", txHash).Str("chain_id", rc.chainID).Uint("poll_attempts", rc.txPollAttempts).Dur("poll_delay", rc.txPollDelay).Msg("restake transaction not included")
-	err = rc.gasManager.ManageInclusionResult(ctx, rc.chainID, false)
+	err = rc.gasManager.ManageInclusionResult(ctx, rc.chainName, false)
 	if err != nil {
 		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to manage gas updates for tx inclusion")
 	}
@@ -292,15 +303,15 @@ func (rc *restakeClient) createRestakeMessages(ctx context.Context, delegators [
 	// Map them into an exec message
 	restakeMessages := []sdk.Msg{}
 	for _, batch := range batches {
-		msgsAny := make([]*cdctypes.Any, len(delegateMsgs))
+		msgsAny := []*cdctypes.Any{}
 
-		for i, msg := range batch {
+		for _, msg := range batch {
 			any, err := cdctypes.NewAnyWithValue(msg)
 			if err != nil {
 				return nil, err
 			}
 
-			msgsAny[i] = any
+			msgsAny = append(msgsAny, any)
 		}
 
 		execMessage := &authztypes.MsgExec{

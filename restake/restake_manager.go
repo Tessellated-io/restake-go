@@ -13,12 +13,14 @@ import (
 	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
 	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
+	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/pickaxe/log"
 	routertypes "github.com/tessellated-io/router/types"
 
 	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/codec"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	txauth "github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
@@ -39,6 +41,8 @@ type RestakeManager struct {
 
 	// Restake services
 	configurationLoader *configurationLoader
+
+	debug_runSync bool
 }
 
 func NewRestakeManager(
@@ -50,7 +54,10 @@ func NewRestakeManager(
 	// NOTE: Chain router is injected from cmd so that we can hot swap if needed.
 	chainRouter routertypes.Router,
 
+	// If `true`, run restake synchronously across networks to aid in debugging.
 	gasManager tx.GasManager,
+
+	debug_runSync bool,
 ) (*RestakeManager, error) {
 	cdc := getCodec()
 
@@ -63,107 +70,154 @@ func NewRestakeManager(
 		logger:      logger,
 
 		configurationLoader: configurationLoader,
+
+		debug_runSync: debug_runSync,
 	}
 
 	return restakeManager, nil
 }
 
-func (rm *RestakeManager) Start(ctx context.Context) {
-	firstRunCompleted := false
+func (rm *RestakeManager) Start(mainContext context.Context) {
+	rm.logger.Debug().Msg("starting restake")
 
 	// Loop indefinitely
 	for {
+		rm.logger.Debug().Msg("starting core restake loop")
+
 		// Load localConfiguration from disk so we can configure things like run time and retries
 		localConfiguration, err := rm.configurationLoader.LoadConfiguration()
 		if err != nil {
 			rm.logger.Error().Err(err).Msg("failed to load configuration from file")
 			continue
 		}
+		rm.logger.Debug().Msg("reloaded config from file")
 
-		if firstRunCompleted {
-			time.Sleep(localConfiguration.RunInterval())
-		} else {
-			firstRunCompleted = true
-		}
+		// Fork the passed context to account for timeout
+		now := time.Now()
+		nextRunTime := now.Add(localConfiguration.RunInterval())
+		rm.logger.Debug().Time("deadline", nextRunTime).Msg("calculated deadline for restake run")
+
+		// NOTE: This context is explicitly canceled at the end of the for loop. We can't use `defer` because this
+		//			 is an infinite loop.
+		deadlineContext, cancelDeadlineFunc := context.WithDeadline(mainContext, nextRunTime)
 
 		// Retryable chain registry client
 		rawChainClient := chainregistry.NewChainRegistryClient(rm.logger)
-		chainRegistryClient, err := chainregistry.NewRetryableChainRegistryClient(localConfiguration.NetworkRetryAttempts, localConfiguration.NetworkRetryDelay(), rawChainClient)
+		chainRegistryClient, err := chainregistry.NewRetryableChainRegistryClient(
+			localConfiguration.NetworkRetryAttempts,
+			localConfiguration.NetworkRetryDelay(),
+			rawChainClient,
+			rm.logger,
+		)
 		if err != nil {
-			panic(fmt.Sprintf("unable to create a chain registry client: %s", err))
+			rm.logger.Error().Err(err).Msg("unable to create a chain registry client")
+			continue
 		}
+		rm.logger.Debug().Msg("created chain registry client")
+
+		// Hotswap client in gas manager
+		rm.gasManager.SetChainRegistryClient(chainRegistryClient)
 
 		// Load Restake Configuration from registry
-		registryConfiguration, err := chainRegistryClient.Validator(ctx, localConfiguration.TargetValidator)
+		registryConfiguration, err := chainRegistryClient.Validator(deadlineContext, localConfiguration.TargetValidator)
 		if err != nil {
 			rm.logger.Error().Err(err).Msg("failed to load configuration from Restake's validator registry")
 			continue
 		}
+		rm.logger.Debug().Int("registry_count", len(registryConfiguration.Chains)).Msg("loaded restake registry data")
 
 		// Filter networks marked to ignore
 		ignoreChainNames := localConfiguration.Ignores
 		restakeChains := []chainregistry.RestakeInfo{}
 		for _, chain := range registryConfiguration.Chains {
+			shouldIgnore := false
 			for _, ignore := range ignoreChainNames {
 				if strings.EqualFold(chain.Name, ignore) {
 					rm.logger.Info().Str("chain_id", chain.Name).Msg("ignoring chain due to configuration file")
-					continue
+					shouldIgnore = true
 				}
 			}
 
-			restakeChains = append(restakeChains, chain)
+			if !shouldIgnore {
+				restakeChains = append(restakeChains, chain)
+			}
 		}
+		rm.logger.Debug().Int("chain_count", len(restakeChains)).Msg("determined chains to restake")
 
 		// Run for each network
 		results = []*RestakeResult{}
 		for _, restakeChain := range restakeChains {
 			wg.Add(1)
 
-			go rm.runRestakeForNetwork(
-				ctx,
-				localConfiguration,
-				restakeChain,
-				chainRegistryClient,
-			)
-
 			// Print results whenever they all finish
-			go func() {
-				wg.Wait()
-				printResults(results, rm.logger)
-			}()
+			// Do this async so that the time.sleep() below tracks time correctly
+			if rm.debug_runSync {
+				rm.logger.Debug().Msg("running restake synchronously for debugging")
+				rm.runRestakeForNetwork(
+					deadlineContext,
+					localConfiguration,
+					restakeChain,
+					chainRegistryClient,
+				)
+				rm.logger.Debug().Msg("synchronously running runRestakeForNetwork has finished")
+
+			} else {
+				go rm.runRestakeForNetwork(
+					deadlineContext,
+					localConfiguration,
+					restakeChain,
+					chainRegistryClient,
+				)
+
+			}
+
 		}
+
+		// Wait until all jobs time out, or finish
+		rm.logger.Debug().Msg("all jobs kicked off")
+		wg.Wait()
+		rm.logger.Debug().Msg("all jobs finished")
+
+		// Print results whenever they all finish
+		// Do this async so that the time.sleep() below tracks time correctly
+		if rm.debug_runSync {
+			rm.logger.Debug().Msg("waiting and printing results synchronously for debugging")
+			rm.waitForAndPrintResults()
+		} else {
+			go rm.waitForAndPrintResults()
+		}
+
+		// Sleep until the next run
+		timeToNextRun := time.Until(nextRunTime)
+		rm.logger.Debug().Time("next_run_time", nextRunTime).Str("time_to_next_run", timeToNextRun.String()).Msg("waiting for next run")
+		time.Sleep(timeToNextRun)
+
+		// Cancel the context
+		cancelDeadlineFunc()
 	}
 }
 
+// NOTE: This thread should be run from a goroutine, unless in debug mode.
+func (rm *RestakeManager) waitForAndPrintResults() {
+	wg.Wait()
+	printResults(results, rm.logger)
+}
+
+// NOTE: This thread should be run from a goroutine, unless in debug mode.
 func (rm *RestakeManager) runRestakeForNetwork(
 	ctx context.Context,
 	localConfiguration *Configuration,
 	restakeChain chainregistry.RestakeInfo,
 	chainRegistryClient chainregistry.ChainRegistryClient,
 ) {
-	timeoutContext, cancelFunc := context.WithTimeout(ctx, localConfiguration.RunInterval())
-	defer cancelFunc()
-
 	// Results from the run
 	var txHashes []string
 	var err error
 
 	defer func() {
+		rm.logger.Debug().Str("chain_id", restakeChain.Name).Msg("restake finished")
 		if err != nil {
 			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
-		}
-
-		// Send health check if enabled
-		if !localConfiguration.DisableHealthChecks {
-			healthClient := health.NewHealthClient(rm.logger, restakeChain.Name, true)
-
-			if err == nil {
-				err = healthClient.SendSuccess(restakeChain.Name)
-			} else {
-				err = healthClient.SendFailure(restakeChain.Name)
-			}
-		} else {
-			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
 		}
 
 		// Add results
@@ -174,27 +228,43 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		}
 		results = append(results, result)
 
+		// Send health check if enabled
+		if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
+			healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
+
+			if err == nil {
+				err = healthClient.SendSuccess(restakeChain.Name)
+			} else {
+				err = healthClient.SendFailure(restakeChain.Name)
+			}
+		} else {
+			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+		}
+
 		// Leave wait group
 		defer wg.Done()
 	}()
 	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf(" [%s]", restakeChain.Name))
 
 	// Get the chain info
-	chainInfo, err := chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
-	if err == nil {
+	var chainInfo *chainregistry.ChainInfo
+	chainInfo, err = chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
+	if err != nil {
 		return
 	}
 
 	// Derive info needed about the chain
 	chainID := chainInfo.ChainID
 
-	stakingDenom, err := chainInfo.StakingDenom()
+	var stakingDenom string
+	stakingDenom, err = chainInfo.StakingDenom()
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Msg("failed to get staking denom")
 		return
 	}
 
-	minimumRequiredReward, err := math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
+	var minimumRequiredReward math.LegacyDec
+	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
@@ -205,67 +275,84 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	botAddress := restakeChain.Restake.Address
 
 	// Get an endpoint from the Router
-	grpcEndpoint, err := rm.chainRouter.GrpcEndpoint(chainInfo.ChainID)
+	var grpcEndpoint string
+	grpcEndpoint, err = rm.chainRouter.GrpcEndpoint(chainInfo.ChainID)
 	if err != nil {
 		return
 	}
 
 	// Bind up an RPC Client with some retries
-	rawRpcClient, err := rpc.NewGrpcClient(grpcEndpoint, cdc, prefixedLogger)
+	var rawRpcClient rpc.RpcClient
+	rawRpcClient, err = rpc.NewGrpcClient(grpcEndpoint, cdc, prefixedLogger)
 	if err != nil {
 		return
 	}
 
-	rpcClient, err := rpc.NewRetryableRpcClient(localConfiguration.NetworkRetryAttempts, localConfiguration.NetworkRetryDelay(), rawRpcClient)
+	var rpcClient rpc.RpcClient
+	rpcClient, err = rpc.NewRetryableRpcClient(
+		localConfiguration.NetworkRetryAttempts,
+		localConfiguration.NetworkRetryDelay(),
+		rawRpcClient,
+		prefixedLogger,
+	)
 	if err != nil {
 		return
 	}
 
 	// Set minimum bot balance to be 1 fee token.
-	minimumRequiredBotBalance, err := chainInfo.OneFeeToken(ctx, rpcClient)
+	var minimumRequiredBotBalance *sdk.Coin
+	minimumRequiredBotBalance, err = chainInfo.OneFeeToken(ctx, rpcClient)
 	if err != nil {
 		return
 	}
 
 	// Create a Grant manager
-	grantManager, err := NewGrantManager(restakeChain.Restake.Address, chainID, prefixedLogger, rpcClient, restakeChain.Address)
+	var grantManager *grantManager
+	grantManager, err = NewGrantManager(restakeChain.Restake.Address, chainID, prefixedLogger, rpcClient, stakingDenom, validatorAddress)
 	if err != nil {
 		return
 	}
 
 	// Create a tx provider
-	feeDenom, err := chainInfo.FeeDenom()
+	var feeDenom string
+	feeDenom, err = chainInfo.FeeDenom()
 	if err != nil {
 		return
 	}
 
 	slip44 := uint(chainInfo.Slip44)
-	signer, err := tx.GetSoftSigner(slip44, localConfiguration.BotMnemonic)
+	var signer crypto.BytesSigner
+	signer, err = tx.GetSoftSigner(slip44, localConfiguration.BotMnemonic)
 	if err != nil {
 		return
 	}
 
 	txConfig := txauth.NewTxConfig(cdc, txauth.DefaultSignModes)
 
-	simulationManager, err := tx.NewSimulationManager(localConfiguration.GasFactor, rpcClient, txConfig)
+	var simulationManager tx.SimulationManager
+	simulationManager, err = tx.NewSimulationManager(localConfiguration.GasFactor, rpcClient, txConfig)
 	if err != nil {
 		return
 	}
 
-	txProvider, err := tx.NewTxProvider(signer, chainID, feeDenom, localConfiguration.VersionedMemo(rm.version), prefixedLogger, simulationManager, txConfig)
+	var txProvider tx.TxProvider
+	txProvider, err = tx.NewTxProvider(signer, chainID, feeDenom, localConfiguration.VersionedMemo(rm.version), prefixedLogger, simulationManager, txConfig)
 	if err != nil {
 		return
 	}
 
 	// Create a signing metadata provider
-	signingMetadataProvider, err := tx.NewSigningMetadataProvider(chainID, rpcClient)
+	var signingMetadataProvider *tx.SigningMetadataProvider
+	signingMetadataProvider, err = tx.NewSigningMetadataProvider(chainID, rpcClient)
 	if err != nil {
 		return
 	}
 
-	restakeClient, err := NewRestakeClient(
+	var restakeClient *restakeClient
+	restakeClient, err = NewRestakeClient(
 		chainInfo.Bech32Prefix,
 		chainID,
+		restakeChain.Name,
 		feeDenom,
 		stakingDenom,
 		localConfiguration.BatchSize,
@@ -289,7 +376,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		return
 	}
 
-	txHashes, err = restakeClient.restake(timeoutContext)
+	txHashes, err = restakeClient.restake(ctx)
 }
 
 // Results of running Restake on a given network
@@ -316,7 +403,12 @@ func printResults(results RestakeResults, log *log.Logger) {
 				txHashes.Str(txHash)
 			}
 
-			log.Info().Array("tx_hashes", txHashes).Msg(fmt.Sprintf("✅ %s: Success", result.network))
+			msg := fmt.Sprintf("✅ %s: Success", result.network)
+			if len(result.txHashes) == 0 {
+				msg = fmt.Sprintf("%s | 😬 No transactions sent. The restake website may mark you as offline.", msg)
+			}
+
+			log.Info().Array("tx_hashes", txHashes).Msg(msg)
 		} else {
 			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
 		}

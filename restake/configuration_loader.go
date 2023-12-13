@@ -2,7 +2,11 @@ package restake
 
 import (
 	"fmt"
+	"os"
 	"time"
+
+	"github.com/tessellated-io/pickaxe/config"
+	"gopkg.in/yaml.v2"
 )
 
 const RestakeConfigFilename = "restake.yaml"
@@ -18,7 +22,7 @@ type Configuration struct {
 	TxPollAttempts           uint     `yaml:"tx_poll_attempts" comment:"How many attempts to poll for a tx being included before failing."`
 	NetworkRetryDelaySeconds uint     `yaml:"network_retry_delay_seconds" comment:"How long to delay between retries due to RPC failures"`
 	NetworkRetryAttempts     uint     `yaml:"network_retry_attempts" comment:"How many attempts to retry due to network errors before failing."`
-	DisableHealthChecks      bool     `yaml:"disable_health_checks" comment:"Whether status should be reported to healthchecks.io"`
+	HealthChecksPingKey      string   `yaml:"health_checks_ping_key" comment:"A ping API key for healthchecks.io. If empty, no pings will be delivered."`
 	RunIntervalSeconds       uint     `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
 	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
 }
@@ -40,14 +44,31 @@ func (c *Configuration) TxPollDelay() time.Duration {
 }
 
 // configurationLoader loads configuration
-type configurationLoader struct{}
+type configurationLoader struct {
+	configurationFile string
+}
 
-func NewConfigurationLoader() (*configurationLoader, error) {
-	loader := &configurationLoader{}
+func NewConfigurationLoader(configurationDirectory string) (*configurationLoader, error) {
+	configurationFile := config.ExpandHomeDir(fmt.Sprintf("%s/%s", configurationDirectory, RestakeConfigFilename))
+
+	loader := &configurationLoader{
+		configurationFile: configurationFile,
+	}
 
 	return loader, nil
 }
 
 func (cl *configurationLoader) LoadConfiguration() (*Configuration, error) {
-	return &Configuration{}, nil
+	data, err := os.ReadFile(cl.configurationFile)
+	if err != nil {
+		return nil, err
+	}
+
+	loaded := &Configuration{}
+	err = yaml.Unmarshal(data, loaded)
+	if err != nil {
+		return nil, err
+	}
+
+	return loaded, nil
 }

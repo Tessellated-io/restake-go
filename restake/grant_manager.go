@@ -26,15 +26,18 @@ type grantManager struct {
 	chainID          string
 	logger           *log.Logger
 	rpcClient        rpc.RpcClient
-	stakingToken     string
+	stakingDenom     string
 	validatorAddress string
 }
 
-func NewGrantManager(botAddress, chainID string, logger *log.Logger, rpcClient rpc.RpcClient, validatorAddress string) (*grantManager, error) {
+func NewGrantManager(botAddress, chainID string, logger *log.Logger, rpcClient rpc.RpcClient, stakingToken, validatorAddress string) (*grantManager, error) {
 	return &grantManager{
-		botAddress: botAddress,
-		logger:     logger,
-		rpcClient:  rpcClient,
+		botAddress:       botAddress,
+		chainID:          chainID,
+		logger:           logger,
+		rpcClient:        rpcClient,
+		stakingDenom:     stakingToken,
+		validatorAddress: validatorAddress,
 	}, nil
 }
 
@@ -62,15 +65,15 @@ func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward 
 	restakeDelegators := []*restakeDelegator{}
 	for _, delegatorAddress := range delegatorAddresses {
 		// Fetch total rewards
-		totalRewards, err := gm.rpcClient.GetPendingRewards(ctx, delegatorAddress, gm.validatorAddress, gm.stakingToken)
+		totalRewards, err := gm.rpcClient.GetPendingRewards(ctx, delegatorAddress, gm.validatorAddress, gm.stakingDenom)
 		if err != nil {
 			return nil, err
 		}
-		gm.logger.Debug().Str("delegator", delegatorAddress).Str("total rewards", totalRewards.String()).Str("staking token", gm.stakingToken).Msg("fetched delegation rewards")
+		gm.logger.Debug().Str("delegator", delegatorAddress).Str("total_rewards", totalRewards.String()).Str("staking_token", gm.stakingDenom).Msg("fetched delegation rewards")
 
 		// Determine if they are above the minimum
 		if totalRewards.LT(minimumReward) {
-			gm.logger.Debug().Str("delegator", delegatorAddress).Str("total rewards", totalRewards.String()).Str("staking token", gm.stakingToken).Str("minimum_rewards", minimumReward.String()).Msg("skipping because below award threshold")
+			gm.logger.Debug().Str("delegator", delegatorAddress).Str("total_rewards", totalRewards.String()).Str("staking_token", gm.stakingDenom).Str("minimum_rewards", minimumReward.String()).Msg("skipping because below award threshold")
 			continue
 		}
 
@@ -82,7 +85,7 @@ func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward 
 		restakeDelegators = append(restakeDelegators, restakeDelegator)
 	}
 
-	gm.logger.Debug().Int("eligible_delegators", len(restakeDelegators)).Str("minimum", minimumReward.String()).Msg("fetched valid grants above minimum")
+	gm.logger.Debug().Int("eligible_delegators", len(restakeDelegators)).Str("minimum", minimumReward.String()).Str("denom", gm.stakingDenom).Msg("fetched valid grants above minimum")
 	return restakeDelegators, nil
 }
 
