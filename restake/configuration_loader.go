@@ -5,11 +5,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/tessellated-io/pickaxe/config"
+	file "github.com/tessellated-io/pickaxe/config"
+	"github.com/tessellated-io/pickaxe/log"
 	"gopkg.in/yaml.v2"
 )
 
-const RestakeConfigFilename = "restake.yaml"
+const RestakeConfigFilename = "restake.yml"
 
 // Configuration is configuration for restake
 type Configuration struct {
@@ -17,7 +18,6 @@ type Configuration struct {
 	Ignores                  []string `yaml:"ignores" comment:"A list of network names to ignore. Ex. 'cosmoshub' or 'osmosis'"`
 	BotMnemonic              string   `yaml:"mnemonic" comment:"The mnemonic to use for Restaking"`
 	Memo                     string   `yaml:"memo" comment:"An optional memo to include in Restake transactions"`
-	GasFactor                float64  `yaml:"gas_factor" comment:"A factor to multiply gas estimates by"`
 	TxPollDelaySeconds       uint     `yaml:"tx_poll_delay_seconds" comment:"How long to delay between attempts to poll for a tx being included in a block"`
 	TxPollAttempts           uint     `yaml:"tx_poll_attempts" comment:"How many attempts to poll for a tx being included before failing."`
 	NetworkRetryDelaySeconds uint     `yaml:"network_retry_delay_seconds" comment:"How long to delay between retries due to RPC failures"`
@@ -45,21 +45,23 @@ func (c *Configuration) TxPollDelay() time.Duration {
 
 // configurationLoader loads configuration
 type configurationLoader struct {
-	configurationFile string
+	configurationDirectory string
+	logger                 *log.Logger
 }
 
-func NewConfigurationLoader(configurationDirectory string) (*configurationLoader, error) {
-	configurationFile := config.ExpandHomeDir(fmt.Sprintf("%s/%s", configurationDirectory, RestakeConfigFilename))
-
+func NewConfigurationLoader(configurationDirectory string, logger *log.Logger) (*configurationLoader, error) {
 	loader := &configurationLoader{
-		configurationFile: configurationFile,
+		configurationDirectory: configurationDirectory,
+		logger:                 logger,
 	}
 
 	return loader, nil
 }
 
 func (cl *configurationLoader) LoadConfiguration() (*Configuration, error) {
-	data, err := os.ReadFile(cl.configurationFile)
+	configurationFile := cl.getConfigFile()
+
+	data, err := os.ReadFile(configurationFile)
 	if err != nil {
 		return nil, err
 	}
@@ -71,4 +73,24 @@ func (cl *configurationLoader) LoadConfiguration() (*Configuration, error) {
 	}
 
 	return loaded, nil
+}
+
+func (cl *configurationLoader) Initialize() error {
+	// Example config
+	config := &Configuration{}
+
+	configFile := cl.getConfigFile()
+	header := "This is the configuration file for Treasurer"
+
+	err := file.WriteYamlWithComments(config, header, configFile, cl.logger)
+	if err != nil {
+		cl.logger.Error().Err(err).Msg("error writing file")
+		return err
+	}
+
+	return nil
+}
+
+func (cl *configurationLoader) getConfigFile() string {
+	return fmt.Sprintf("%s/%s", cl.configurationDirectory, RestakeConfigFilename)
 }

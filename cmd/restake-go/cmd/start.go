@@ -29,7 +29,7 @@ var startCmd = &cobra.Command{
 		ctx := cmd.Context()
 
 		// Configuration loader
-		configurationLoader, err := restake.NewConfigurationLoader(configurationDirectory)
+		configurationLoader, err := restake.NewConfigurationLoader(configurationDirectory, logger)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a configuration loader")
 			return
@@ -41,7 +41,13 @@ var startCmd = &cobra.Command{
 			logger.Error().Err(err).Msg("unable to create a gas price provider")
 			return
 		}
-		gasManager, err := tx.NewDefaultGasManager(0.001, gasPriceProvider, logger, nil)
+		gasManager, err := tx.NewGeometricGasManager(
+			0.00001, // step size
+			0.01,    // max step size
+			0.4,     // scale factor
+			gasPriceProvider,
+			logger,
+		)
 		if err != nil {
 			logger.Error().Err(err).Msg("unable to create a gas manager")
 			return

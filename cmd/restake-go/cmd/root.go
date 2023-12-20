@@ -4,17 +4,19 @@ Copyright © 2023 Tessellated <tessellated.io>
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/pickaxe/log"
 )
 
-const fileRouterConfigFilename = "chains.yaml"
+const fileRouterConfigFilename = "chains.yml"
 
 var (
-	logger                 *log.Logger
+	rawLogLevel string
+	logger      *log.Logger
+
 	configurationDirectory string
 )
 
@@ -25,6 +27,13 @@ var rootCmd = &cobra.Command{
 	Long: `Restake-Go is an alternative implementation of the Restake protocol by Tessellated.
 	
 See also: https://github.com/eco-stake/restake.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Get a logger
+		logLevel := log.ParseLogLevel(rawLogLevel)
+		logger = log.NewLogger(logLevel)
+
+		configurationDirectory = config.ExpandHomeDir(configurationDirectory)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -37,18 +46,6 @@ func Execute() {
 }
 
 func init() {
-	var rawLogLevel string
-
-	rootCmd.PersistentFlags().StringVarP(&configurationDirectory, "config-directory", "c", "~/.restake", "Where to store Restake-Go's configuration")
+	rootCmd.PersistentFlags().StringVarP(&configurationDirectory, "config-directory", "c", "~/.restake", "Where to store Restake's configuration")
 	rootCmd.PersistentFlags().StringVarP(&rawLogLevel, "log-level", "l", "info", "Logging level")
-
-	// TODO
-	fmt.Println(rawLogLevel)
-
-	// Get a logger
-	logLevel := log.ParseLogLevel(rawLogLevel)
-
-	fmt.Println(logLevel)
-	logger = log.NewLogger(logLevel)
-	// logger = logger.ApplyPrefix(" restake")
 }

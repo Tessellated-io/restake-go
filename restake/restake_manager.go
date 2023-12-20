@@ -77,124 +77,120 @@ func NewRestakeManager(
 	return restakeManager, nil
 }
 
-func (rm *RestakeManager) Start(mainContext context.Context) {
+func (rm *RestakeManager) Start(ctx context.Context) {
 	rm.logger.Debug().Msg("starting restake")
 
-	// Loop indefinitely
+	// Run immediately, initially.
+	nextRunTime := time.Now()
+
 	for {
-		rm.logger.Debug().Msg("starting core restake loop")
+		// Sleep until the next run time.
+		timeToNextRun := time.Until(nextRunTime)
+		rm.logger.Info().Time("next_run_time", nextRunTime).Str("time_to_next_run", timeToNextRun.String()).Msg("waiting for next run")
+		time.Sleep(timeToNextRun)
 
-		// Load localConfiguration from disk so we can configure things like run time and retries
-		localConfiguration, err := rm.configurationLoader.LoadConfiguration()
+		// Reload the config
+		localConfiguration := rm.mustLoadConfig()
+
+		// Calculate the run deadline
+		nextRunTime = time.Now().Add(localConfiguration.RunInterval())
+		deadlineContext, cancelFunc := context.WithDeadline(ctx, nextRunTime)
+
+		// Monitor balances
+		rm.runOnce(deadlineContext, localConfiguration)
+
+		// Cancel the context.
+		cancelFunc()
+	}
+}
+
+func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Configuration) {
+	var err error
+
+	defer func() {
+		// Log errors, if one has been populated
 		if err != nil {
-			rm.logger.Error().Err(err).Msg("failed to load configuration from file")
-			continue
+			rm.logger.Error().Err(err).Msg("encountered error in restaking run.")
+		} else {
+			rm.logger.Info().Msg("finished a monitoring run.")
 		}
-		rm.logger.Debug().Msg("reloaded config from file")
+	}()
+	rm.logger.Debug().Msg("starting core restake loop")
 
-		// Fork the passed context to account for timeout
-		now := time.Now()
-		nextRunTime := now.Add(localConfiguration.RunInterval())
-		rm.logger.Debug().Time("deadline", nextRunTime).Msg("calculated deadline for restake run")
+	// Retryable chain registry client
+	rawChainClient := chainregistry.NewChainRegistryClient(rm.logger)
+	chainRegistryClient, err := chainregistry.NewRetryableChainRegistryClient(
+		localConfiguration.NetworkRetryAttempts,
+		localConfiguration.NetworkRetryDelay(),
+		rawChainClient,
+		rm.logger,
+	)
+	if err != nil {
+		rm.logger.Error().Err(err).Msg("unable to create a chain registry client")
+		return
+	}
+	rm.logger.Debug().Msg("created chain registry client")
 
-		// NOTE: This context is explicitly canceled at the end of the for loop. We can't use `defer` because this
-		//			 is an infinite loop.
-		deadlineContext, cancelDeadlineFunc := context.WithDeadline(mainContext, nextRunTime)
+	// Load Restake Configuration from registry
+	registryConfiguration, err := chainRegistryClient.Validator(ctx, localConfiguration.TargetValidator)
+	if err != nil {
+		rm.logger.Error().Err(err).Msg("failed to load configuration from Restake's validator registry")
+		return
+	}
+	rm.logger.Debug().Int("registry_count", len(registryConfiguration.Chains)).Msg("loaded restake registry data")
 
-		// Retryable chain registry client
-		rawChainClient := chainregistry.NewChainRegistryClient(rm.logger)
-		chainRegistryClient, err := chainregistry.NewRetryableChainRegistryClient(
-			localConfiguration.NetworkRetryAttempts,
-			localConfiguration.NetworkRetryDelay(),
-			rawChainClient,
-			rm.logger,
-		)
-		if err != nil {
-			rm.logger.Error().Err(err).Msg("unable to create a chain registry client")
-			continue
-		}
-		rm.logger.Debug().Msg("created chain registry client")
-
-		// Hotswap client in gas manager
-		rm.gasManager.SetChainRegistryClient(chainRegistryClient)
-
-		// Load Restake Configuration from registry
-		registryConfiguration, err := chainRegistryClient.Validator(deadlineContext, localConfiguration.TargetValidator)
-		if err != nil {
-			rm.logger.Error().Err(err).Msg("failed to load configuration from Restake's validator registry")
-			continue
-		}
-		rm.logger.Debug().Int("registry_count", len(registryConfiguration.Chains)).Msg("loaded restake registry data")
-
-		// Filter networks marked to ignore
-		ignoreChainNames := localConfiguration.Ignores
-		restakeChains := []chainregistry.RestakeInfo{}
-		for _, chain := range registryConfiguration.Chains {
-			shouldIgnore := false
-			for _, ignore := range ignoreChainNames {
-				if strings.EqualFold(chain.Name, ignore) {
-					rm.logger.Info().Str("chain_id", chain.Name).Msg("ignoring chain due to configuration file")
-					shouldIgnore = true
-				}
-			}
-
-			if !shouldIgnore {
-				restakeChains = append(restakeChains, chain)
+	// Filter networks marked to ignore
+	ignoreChainNames := localConfiguration.Ignores
+	restakeChains := []chainregistry.RestakeInfo{}
+	for _, chain := range registryConfiguration.Chains {
+		shouldIgnore := false
+		for _, ignore := range ignoreChainNames {
+			if strings.EqualFold(chain.Name, ignore) {
+				rm.logger.Info().Str("chain_id", chain.Name).Msg("ignoring chain due to configuration file")
+				shouldIgnore = true
 			}
 		}
-		rm.logger.Debug().Int("chain_count", len(restakeChains)).Msg("determined chains to restake")
 
-		// Run for each network
-		results = []*RestakeResult{}
-		for _, restakeChain := range restakeChains {
-			wg.Add(1)
-
-			// Print results whenever they all finish
-			// Do this async so that the time.sleep() below tracks time correctly
-			if rm.debug_runSync {
-				rm.logger.Debug().Msg("running restake synchronously for debugging")
-				rm.runRestakeForNetwork(
-					deadlineContext,
-					localConfiguration,
-					restakeChain,
-					chainRegistryClient,
-				)
-				rm.logger.Debug().Msg("synchronously running runRestakeForNetwork has finished")
-
-			} else {
-				go rm.runRestakeForNetwork(
-					deadlineContext,
-					localConfiguration,
-					restakeChain,
-					chainRegistryClient,
-				)
-
-			}
-
+		if !shouldIgnore {
+			restakeChains = append(restakeChains, chain)
 		}
+	}
+	rm.logger.Debug().Int("chain_count", len(restakeChains)).Msg("determined chains to restake")
 
-		// Wait until all jobs time out, or finish
-		rm.logger.Debug().Msg("all jobs kicked off")
-		wg.Wait()
-		rm.logger.Debug().Msg("all jobs finished")
+	// Run for each network
+	results = []*RestakeResult{}
+	for _, restakeChain := range restakeChains {
+		wg.Add(1)
 
 		// Print results whenever they all finish
 		// Do this async so that the time.sleep() below tracks time correctly
 		if rm.debug_runSync {
-			rm.logger.Debug().Msg("waiting and printing results synchronously for debugging")
-			rm.waitForAndPrintResults()
+			rm.logger.Debug().Msg("running restake synchronously for debugging")
+			rm.runRestakeForNetwork(
+				ctx,
+				localConfiguration,
+				restakeChain,
+				chainRegistryClient,
+			)
+			rm.logger.Debug().Msg("synchronously running runRestakeForNetwork has finished")
+
 		} else {
-			go rm.waitForAndPrintResults()
+			go rm.runRestakeForNetwork(
+				ctx,
+				localConfiguration,
+				restakeChain,
+				chainRegistryClient,
+			)
 		}
 
-		// Sleep until the next run
-		timeToNextRun := time.Until(nextRunTime)
-		rm.logger.Debug().Time("next_run_time", nextRunTime).Str("time_to_next_run", timeToNextRun.String()).Msg("waiting for next run")
-		time.Sleep(timeToNextRun)
-
-		// Cancel the context
-		cancelDeadlineFunc()
 	}
+
+	// Wait until all jobs time out, or finish
+	rm.logger.Debug().Msg("all jobs kicked off")
+	wg.Wait()
+	rm.logger.Debug().Msg("all jobs finished")
+
+	rm.waitForAndPrintResults()
 }
 
 // NOTE: This thread should be run from a goroutine, unless in debug mode.
@@ -264,9 +260,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	var minimumRequiredReward math.LegacyDec
-	// TODO
-	minimumRequiredReward, err = math.LegacyNewDecFromStr("1")
-	// minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
+	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
@@ -339,7 +333,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	txConfig := txauth.NewTxConfig(cdc, txauth.DefaultSignModes)
 
 	var simulationManager tx.SimulationManager
-	simulationManager, err = tx.NewSimulationManager(localConfiguration.GasFactor, rpcClient, txConfig)
+	simulationManager, err = tx.NewSimulationManager(rpcClient, txConfig)
 	if err != nil {
 		return
 	}
@@ -357,11 +351,30 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		return
 	}
 
+	// Create the tx broadcaster
+	var broadcaster *tx.Broadcaster
+	broadcaster, err = tx.NewDefaultBroadcaster(
+		restakeChain.Name,
+		chainInfo.Bech32Prefix,
+		signer,
+		rm.gasManager,
+		prefixedLogger,
+		rpcClient,
+		signingMetadataProvider,
+		txProvider,
+		localConfiguration.TxPollAttempts,
+		localConfiguration.TxPollDelay(),
+		localConfiguration.NetworkRetryAttempts,
+		localConfiguration.NetworkRetryDelay(),
+	)
+	if err != nil {
+		return
+	}
+
 	var restakeClient *restakeClient
 	restakeClient, err = NewRestakeClient(
 		chainInfo.Bech32Prefix,
 		chainID,
-		restakeChain.Name,
 		feeDenom,
 		stakingDenom,
 		localConfiguration.BatchSize,
@@ -369,16 +382,10 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		botAddress,
 		minimumRequiredReward,
 		minimumRequiredBotBalance,
-		localConfiguration.TxPollDelay(),
-		localConfiguration.TxPollAttempts,
-		localConfiguration.NetworkRetryDelay(),
-		localConfiguration.NetworkRetryAttempts,
-		rm.gasManager,
+		broadcaster,
 		grantManager,
-		txProvider,
 		prefixedLogger,
 		rpcClient,
-		signingMetadataProvider,
 		signer,
 	)
 	if err != nil {
@@ -421,5 +428,17 @@ func printResults(results RestakeResults, log *log.Logger) {
 		} else {
 			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
 		}
+	}
+}
+
+func (rm *RestakeManager) mustLoadConfig() *Configuration {
+	for {
+		config, err := rm.configurationLoader.LoadConfiguration()
+		if err == nil {
+			return config
+		}
+
+		rm.logger.Error().Err(err).Msg("error reloading config. trying again...")
+		time.Sleep(30 * time.Second)
 	}
 }

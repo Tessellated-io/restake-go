@@ -4,10 +4,8 @@ Copyright © 2023 Tessellated <tessellated.io>
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
-	"github.com/tessellated-io/pickaxe/config"
+	file "github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/restake-go/restake"
 	filerouter "github.com/tessellated-io/router/file"
 )
@@ -17,22 +15,25 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a configuration directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger.Info().Str("configuration_directory", configurationDirectory).Msg("initializing restake-go configuration")
+		logger.Info().Str("configuration_directory", configurationDirectory).Msg("initializing treasurer configuration directory")
 
 		// Create folder if needed
-		err := config.CreateDirectoryIfNeeded(configurationDirectory, logger)
+		err := file.CreateDirectoryIfNeeded(configurationDirectory, logger)
 		if err != nil {
 			logger.Error().Err(err).Msg("error writing file")
 			return
 		}
 
-		// Write Restake configuration
-		restakeConfigFile := fmt.Sprintf("%s/%s", configurationDirectory, restake.RestakeConfigFilename)
-		header := "This is the configuration file for Restake"
-		restakeConfig := restake.Configuration{}
-		err = config.WriteYamlWithComments(restakeConfig, header, restakeConfigFile, logger)
+		// Write Treasurer configuration
+		configLoader, err := restake.NewConfigurationLoader(configurationDirectory, logger)
 		if err != nil {
-			logger.Error().Err(err).Msg("error writing file")
+			logger.Error().Err(err).Msg("error writing config")
+			return
+		}
+
+		err = configLoader.Initialize()
+		if err != nil {
+			logger.Error().Err(err).Msg("error writing config")
 			return
 		}
 
@@ -42,7 +43,7 @@ var initCmd = &cobra.Command{
 			logger.Error().Err(err).Msg("error writing file")
 			return
 		}
-		logger.Info().Str("configuration_directory", configurationDirectory).Msg("finished initializing configuration for restake-go")
+		logger.Info().Str("configuration_directory", configurationDirectory).Msg("finished initializing configuration directory for treasurer")
 	},
 }
 
