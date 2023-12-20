@@ -1,4 +1,4 @@
-package codec
+package restake
 
 import (
 	"sync"
@@ -21,7 +21,7 @@ var initRelayerOnce sync.Once
 // The codec
 var cdc *codec.ProtoCodec = nil
 
-func GetCodec() *codec.ProtoCodec {
+func getCodec() *codec.ProtoCodec {
 	initRelayerOnce.Do(func() {
 		interfaceRegistry := codectypes.NewInterfaceRegistry()
 
