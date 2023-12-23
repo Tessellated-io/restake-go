@@ -120,11 +120,12 @@ func (rc *restakeClient) restake(ctx context.Context) ([]string, error) {
 		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📬 sending a batch of messages")
 
 		txHash, err := rc.broadcaster.SignAndBroadcast(ctx, []sdk.Msg{batch})
+		rc.logger.Debug().Str("tx_hash", txHash).Err(err).Msg("restake_client::got result from signAndBroadcast")
 		if err != nil {
 			return nil, err
 		}
 		txHashes = append(txHashes, txHash)
-		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📭 batch sent successfully")
+		rc.logger.Info().Str("tx_hash", txHash).Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📭 batch sent successfully")
 	}
 
 	rc.logger.Info().Str("chain_id", rc.chainID).Msg("🙌 successfully restaked")
