@@ -566,8 +566,8 @@ github.com/tendermint/go-amino v0.16.0 h1:GyhmgQKvqF82e2oZeuMSp9JTN0N09emoSZlb2l
 github.com/tendermint/go-amino v0.16.0/go.mod h1:TQU0M1i/ImAo+tYpZi73AU3V/dKeCoMC9Sphe2ZwGME=
 github.com/tessellated-io/healthchecks v0.0.2 h1:u/eGeg0rlb3tGOz0GXhHHPE5fgoETWnbR9NG5KdMHJI=
 github.com/tessellated-io/healthchecks v0.0.2/go.mod h1:SNLJVFCD2Z9IFRYNiF7f4hoJ4+RsjHgrK7YvKCixfdI=
-github.com/tessellated-io/pickaxe v1.1.0 h1:LSFhgK+GZw88w1F4M1T51FgIWePqTx952yliuuHM7rY=
-github.com/tessellated-io/pickaxe v1.1.0/go.mod h1:G6FMTiWB8rLG4YH0THu2t2tZIMUC2Rykl22JotEIgLM=
+github.com/tessellated-io/pickaxe v1.1.1 h1:T6w8JzWMHVOmEdIN2Vs4+OZXUSDDlS8IaenDj29nb4g=
+github.com/tessellated-io/pickaxe v1.1.1/go.mod h1:G6FMTiWB8rLG4YH0THu2t2tZIMUC2Rykl22JotEIgLM=
 github.com/tessellated-io/router v0.0.5 h1:t6XXH4neABYljW4Nrf1u+orYXf1VUg249BwWMdbD3Bc=
 github.com/tessellated-io/router v0.0.5/go.mod h1:Oj5Zw+/B5IwoL1ocuTsySz/1ZWEIxln50oHt0YbSjlQ=
 github.com/tidwall/btree v1.6.0 h1:LDZfKfQIBHGHWSwckhXI0RPSXzlo+KYdjK7FWSqOzzg=
