@@ -26,6 +26,7 @@ type Configuration struct {
 	RunIntervalSeconds       uint     `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
 	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
 	ChainRegistryBaseUrl     string   `yaml:"chain_registry_base_url" comment:"The base url for the chain registry"`
+	ValidatorRegistryBaseUrl string   `yaml:"validator_registry_base_url" comment:"The base url for the validator registry"`
 }
 
 func (c *Configuration) VersionedMemo(version string) string {

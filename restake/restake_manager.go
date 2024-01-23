@@ -118,7 +118,7 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 	rm.logger.Debug().Msg("starting core restake loop")
 
 	// Retryable chain registry client
-	rawChainClient := chainregistry.NewChainRegistryClient(rm.logger, localConfiguration.ChainRegistryBaseUrl)
+	rawChainClient := chainregistry.NewChainRegistryClient(rm.logger, localConfiguration.ChainRegistryBaseUrl, localConfiguration.ValidatorRegistryBaseUrl)
 	chainRegistryClient, err := chainregistry.NewRetryableChainRegistryClient(
 		localConfiguration.NetworkRetryAttempts,
 		localConfiguration.NetworkRetryDelay(),
