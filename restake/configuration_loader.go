@@ -25,6 +25,7 @@ type Configuration struct {
 	HealthChecksPingKey      string   `yaml:"health_checks_ping_key" comment:"A ping API key for healthchecks.io. If empty, no pings will be delivered."`
 	RunIntervalSeconds       uint     `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
 	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
+	ChainRegistryBaseUrl     string   `yaml:"chain_registry_base_url" comment:"The base url for the chain registry"`
 }
 
 func (c *Configuration) VersionedMemo(version string) string {

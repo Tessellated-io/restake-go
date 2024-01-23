@@ -1,6 +1,6 @@
 module github.com/tessellated-io/restake-go
 
-go 1.20
+go 1.21
 
 require (
 	cosmossdk.io/math v1.1.2
@@ -9,7 +9,7 @@ require (
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/healthchecks v0.0.2
-	github.com/tessellated-io/pickaxe v1.1.3
+	github.com/tessellated-io/pickaxe v1.1.5
 	github.com/tessellated-io/router v0.0.5
 	gopkg.in/yaml.v2 v2.4.0
 )
