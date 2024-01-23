@@ -2,8 +2,6 @@ module github.com/tessellated-io/restake-go
 
 go 1.21
 
-toolchain go1.21.6
-
 require (
 	cosmossdk.io/math v1.1.2
 	github.com/cosmos/cosmos-sdk v0.47.5
