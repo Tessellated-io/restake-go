@@ -224,19 +224,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		}
 		results = append(results, result)
 
-		// Send health check if enabled
-		if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
-			healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
-
-			if err == nil {
-				err = healthClient.SendSuccess(restakeChain.Name)
-			} else {
-				err = healthClient.SendFailure(restakeChain.Name)
-			}
-		} else {
-			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
-		}
-
 		// Leave wait group
 		defer wg.Done()
 	}()
@@ -393,6 +380,19 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	txHashes, err = restakeClient.restake(ctx)
+
+	// Send health check if enabled
+	if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
+		healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
+
+		if err == nil {
+			err = healthClient.SendSuccess(restakeChain.Name)
+		} else {
+			err = healthClient.SendFailure(restakeChain.Name)
+		}
+	} else {
+		rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+	}
 }
 
 // Results of running Restake on a given network
