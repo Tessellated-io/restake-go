@@ -227,7 +227,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		// Leave wait group
 		defer wg.Done()
 	}()
-	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf(" [%s]", restakeChain.Name))
+	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf("[%s]", restakeChain.Name))
 	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("starting restake for network")
 
 	// Get the chain info
