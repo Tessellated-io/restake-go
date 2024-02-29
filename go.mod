@@ -8,8 +8,8 @@ require (
 	github.com/evmos/evmos/v14 v14.0.0
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
-	github.com/tessellated-io/healthchecks v0.0.2
-	github.com/tessellated-io/pickaxe v1.1.6
+	github.com/tessellated-io/healthchecks v0.0.3
+	github.com/tessellated-io/pickaxe v1.1.7-0.20240229192046-22d5fe918298
 	github.com/tessellated-io/router v0.0.5
 	gopkg.in/yaml.v2 v2.4.0
 )
