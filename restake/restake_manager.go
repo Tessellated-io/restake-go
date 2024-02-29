@@ -249,7 +249,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	var minimumRequiredReward math.LegacyDec
-	minimumRequiredReward, err = math.LegacyNewDecFromStr(".0001") // restakeChain.Restake.MinimumReward.String())
+	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
