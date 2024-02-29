@@ -16,6 +16,7 @@ import (
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/pickaxe/log"
+	"github.com/tessellated-io/pickaxe/util"
 	routertypes "github.com/tessellated-io/router/types"
 
 	"cosmossdk.io/math"
@@ -212,6 +213,12 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var err error
 
 	defer func() {
+		// Ensure we didn't crash from panic
+		recoveredErr := recover()
+		if recoveredErr != nil {
+			err = util.InterfaceToError(recoveredErr)
+		}
+
 		if err != nil {
 			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
 		}
@@ -223,6 +230,24 @@ func (rm *RestakeManager) runRestakeForNetwork(
 			err:      err,
 		}
 		results = append(results, result)
+
+		// Send health check if enabled
+		if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
+			healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
+
+			if err == nil {
+				err = healthClient.SendSuccess(restakeChain.Name)
+			} else {
+				err = healthClient.SendFailure(restakeChain.Name)
+			}
+
+			if err != nil {
+				rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("unable to send healthchecks ping")
+			}
+
+		} else {
+			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+		}
 
 		// Leave wait group
 		defer wg.Done()
@@ -393,19 +418,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		}, "")
 	}
 	prefixedLogger.Debug().Str("chain_name", restakeChain.Name).Str("tx_hashes", stringifiedTxHashes).Err(err).Msg("verbose restake results")
-
-	// Send health check if enabled
-	if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
-		healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
-
-		if err == nil {
-			_ = healthClient.SendSuccess(restakeChain.Name)
-		} else {
-			_ = healthClient.SendFailure(restakeChain.Name)
-		}
-	} else {
-		rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
-	}
 }
 
 // Results of running Restake on a given network
