@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tessellated-io/healthchecks/health"
+	"github.com/tessellated-io/pickaxe/arrays"
 	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
 	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
@@ -384,6 +385,14 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 	txHashes, err = restakeClient.restake(ctx)
 	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished restaking")
+
+	stringifiedTxHashes := ""
+	if txHashes != nil {
+		stringifiedTxHashes = arrays.Reduce(txHashes, func(accumulated, next string) string {
+			return fmt.Sprintf("%s%s, ", accumulated, next)
+		}, "")
+	}
+	prefixedLogger.Debug().Str("chain_name", restakeChain.Name).Str("tx_hashes", stringifiedTxHashes).Err(err).Msg("verbose restake results")
 
 	// Send health check if enabled
 	if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
