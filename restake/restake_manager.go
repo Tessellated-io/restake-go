@@ -212,6 +212,10 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var err error
 
 	defer func() {
+		fmt.Println("defer is now executing")
+		fmt.Printf("err is %s\n", err)
+		fmt.Printf("tx hashes[0] is %s\n", txHashes[0])
+
 		if err != nil {
 			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
 		}
