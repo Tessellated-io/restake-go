@@ -403,9 +403,9 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
 
 		if err == nil {
-			err = healthClient.SendSuccess(restakeChain.Name)
+			_ = healthClient.SendSuccess(restakeChain.Name)
 		} else {
-			err = healthClient.SendFailure(restakeChain.Name)
+			_ = healthClient.SendFailure(restakeChain.Name)
 		}
 	} else {
 		rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
