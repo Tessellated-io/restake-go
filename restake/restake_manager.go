@@ -282,7 +282,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished fetching chain registry data")
 
 	// Get an endpoint from the Router
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching delegator data. this might take a while if there are many delegators...")
 	var grpcEndpoint string
 	grpcEndpoint, err = rm.chainRouter.GrpcEndpoint(chainInfo.ChainID)
 	if err != nil {
