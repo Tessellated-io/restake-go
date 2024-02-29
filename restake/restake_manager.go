@@ -238,6 +238,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 	// Derive info needed about the chain
 	chainID := chainInfo.ChainID
+	prefixedLogger.Info().Err(err).Str("chain_id", chainID).Msg("starting restake for network. hang on, fetching data might take a few seconds")
 
 	var stakingDenom string
 	stakingDenom, err = chainInfo.StakingDenom()
@@ -247,7 +248,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	var minimumRequiredReward math.LegacyDec
-	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
+	minimumRequiredReward, err = math.LegacyNewDecFromStr("0") // restakeChain.Restake.MinimumReward.String())
 	if err != nil {
 		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
