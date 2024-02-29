@@ -211,7 +211,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var err error
 
 	defer func() {
-		rm.logger.Debug().Str("chain_id", restakeChain.Name).Msg("restake finished")
 		if err != nil {
 			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
 		}
