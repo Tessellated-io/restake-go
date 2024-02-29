@@ -228,9 +228,10 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		defer wg.Done()
 	}()
 	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf(" [%s]", restakeChain.Name))
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("starting restake for network")
 
 	// Get the chain info
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching chain registry data for chain")
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching chain registry data for chain...")
 	var chainInfo *chainregistry.ChainInfo
 	chainInfo, err = chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
 	if err != nil {
@@ -239,19 +240,18 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 	// Derive info needed about the chain
 	chainID := chainInfo.ChainID
-	prefixedLogger.Info().Str("chain_id", chainID).Msg("starting restake for network. hang on, fetching data might take a few seconds")
 
 	var stakingDenom string
 	stakingDenom, err = chainInfo.StakingDenom()
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Msg("failed to get staking denom")
+		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Msg("failed to get staking denom")
 		return
 	}
 
 	var minimumRequiredReward math.LegacyDec
 	minimumRequiredReward, err = math.LegacyNewDecFromStr("0") // restakeChain.Restake.MinimumReward.String())
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
+		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
 	}
 
@@ -265,7 +265,24 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	validatorAddress := restakeChain.Address
 	botAddress := restakeChain.Restake.Address
 
+	// Fetch the asset list for the chain
+	var assetList *chainregistry.AssetList
+	assetList, err = chainRegistryClient.AssetList(ctx, restakeChain.Name)
+	if err != nil {
+		return
+	}
+
+	// Set minimum bot balance to be 1 fee token.
+	var minimumRequiredBotBalance *sdk.Coin
+	minimumRequiredBotBalance, err = assetList.OneToken(feeDenom)
+	if err != nil {
+		return
+	}
+
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished fetching chain registry data")
+
 	// Get an endpoint from the Router
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching delegator data. this might take a while if there are many delegators...")
 	var grpcEndpoint string
 	grpcEndpoint, err = rm.chainRouter.GrpcEndpoint(chainInfo.ChainID)
 	if err != nil {
@@ -286,20 +303,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		rawRpcClient,
 		prefixedLogger,
 	)
-	if err != nil {
-		return
-	}
-
-	// Fetch the asset list for the chain
-	var assetList *chainregistry.AssetList
-	assetList, err = chainRegistryClient.AssetList(ctx, restakeChain.Name)
-	if err != nil {
-		return
-	}
-
-	// Set minimum bot balance to be 1 fee token.
-	var minimumRequiredBotBalance *sdk.Coin
-	minimumRequiredBotBalance, err = assetList.OneToken(feeDenom)
 	if err != nil {
 		return
 	}
@@ -382,6 +385,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	txHashes, err = restakeClient.restake(ctx)
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished restaking")
 
 	// Send health check if enabled
 	if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
