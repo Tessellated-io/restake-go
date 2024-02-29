@@ -230,6 +230,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf(" [%s]", restakeChain.Name))
 
 	// Get the chain info
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching chain registry data for chain")
 	var chainInfo *chainregistry.ChainInfo
 	chainInfo, err = chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
 	if err != nil {
@@ -238,7 +239,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 	// Derive info needed about the chain
 	chainID := chainInfo.ChainID
-	prefixedLogger.Info().Err(err).Str("chain_id", chainID).Msg("starting restake for network. hang on, fetching data might take a few seconds")
+	prefixedLogger.Info().Str("chain_id", chainID).Msg("starting restake for network. hang on, fetching data might take a few seconds")
 
 	var stakingDenom string
 	stakingDenom, err = chainInfo.StakingDenom()
