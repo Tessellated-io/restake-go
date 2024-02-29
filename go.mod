@@ -9,7 +9,7 @@ require (
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/healthchecks v0.0.3
-	github.com/tessellated-io/pickaxe v1.1.7-0.20240229234959-97d2c2e61fa8
+	github.com/tessellated-io/pickaxe v1.1.7
 	github.com/tessellated-io/router v0.0.5
 	gopkg.in/yaml.v2 v2.4.0
 )
