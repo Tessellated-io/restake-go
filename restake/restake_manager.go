@@ -10,11 +10,13 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tessellated-io/healthchecks/health"
+	"github.com/tessellated-io/pickaxe/arrays"
 	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
 	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/pickaxe/log"
+	"github.com/tessellated-io/pickaxe/util"
 	routertypes "github.com/tessellated-io/router/types"
 
 	"cosmossdk.io/math"
@@ -211,7 +213,12 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var err error
 
 	defer func() {
-		rm.logger.Debug().Str("chain_id", restakeChain.Name).Msg("restake finished")
+		// Ensure we didn't crash from panic
+		recoveredErr := recover()
+		if recoveredErr != nil {
+			err = util.InterfaceToError(recoveredErr)
+		}
+
 		if err != nil {
 			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
 		}
@@ -224,12 +231,32 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		}
 		results = append(results, result)
 
+		// Send health check if enabled
+		if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
+			healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
+
+			if err == nil {
+				err = healthClient.SendSuccess(restakeChain.Name)
+			} else {
+				err = healthClient.SendFailure(restakeChain.Name)
+			}
+
+			if err != nil {
+				rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("unable to send healthchecks ping")
+			}
+
+		} else {
+			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+		}
+
 		// Leave wait group
 		defer wg.Done()
 	}()
-	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf(" [%s]", restakeChain.Name))
+	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf("[%s]", restakeChain.Name))
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("starting restake for network")
 
 	// Get the chain info
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching chain registry data for chain...")
 	var chainInfo *chainregistry.ChainInfo
 	chainInfo, err = chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
 	if err != nil {
@@ -242,14 +269,14 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var stakingDenom string
 	stakingDenom, err = chainInfo.StakingDenom()
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Msg("failed to get staking denom")
+		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Msg("failed to get staking denom")
 		return
 	}
 
 	var minimumRequiredReward math.LegacyDec
 	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_id", chainID).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
+		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
 		return
 	}
 
@@ -262,6 +289,22 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	// Derive info needed about Restake
 	validatorAddress := restakeChain.Address
 	botAddress := restakeChain.Restake.Address
+
+	// Fetch the asset list for the chain
+	var assetList *chainregistry.AssetList
+	assetList, err = chainRegistryClient.AssetList(ctx, restakeChain.Name)
+	if err != nil {
+		return
+	}
+
+	// Set minimum bot balance to be 1 fee token.
+	var minimumRequiredBotBalance *sdk.Coin
+	minimumRequiredBotBalance, err = assetList.OneToken(feeDenom)
+	if err != nil {
+		return
+	}
+
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished fetching chain registry data")
 
 	// Get an endpoint from the Router
 	var grpcEndpoint string
@@ -284,20 +327,6 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		rawRpcClient,
 		prefixedLogger,
 	)
-	if err != nil {
-		return
-	}
-
-	// Fetch the asset list for the chain
-	var assetList *chainregistry.AssetList
-	assetList, err = chainRegistryClient.AssetList(ctx, restakeChain.Name)
-	if err != nil {
-		return
-	}
-
-	// Set minimum bot balance to be 1 fee token.
-	var minimumRequiredBotBalance *sdk.Coin
-	minimumRequiredBotBalance, err = assetList.OneToken(feeDenom)
 	if err != nil {
 		return
 	}
@@ -380,19 +409,15 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	txHashes, err = restakeClient.restake(ctx)
+	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished restaking")
 
-	// Send health check if enabled
-	if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
-		healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
-
-		if err == nil {
-			err = healthClient.SendSuccess(restakeChain.Name)
-		} else {
-			err = healthClient.SendFailure(restakeChain.Name)
-		}
-	} else {
-		rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+	stringifiedTxHashes := ""
+	if txHashes != nil {
+		stringifiedTxHashes = arrays.Reduce(txHashes, func(accumulated, next string) string {
+			return fmt.Sprintf("%s%s, ", accumulated, next)
+		}, "")
 	}
+	prefixedLogger.Debug().Str("chain_name", restakeChain.Name).Str("tx_hashes", stringifiedTxHashes).Err(err).Msg("verbose restake results")
 }
 
 // Results of running Restake on a given network
