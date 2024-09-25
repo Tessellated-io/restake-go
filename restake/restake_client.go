@@ -33,6 +33,7 @@ type restakeClient struct {
 	validatorAddress          string
 	minimumRequiredReward     math.LegacyDec
 	minimumRequiredBotBalance *sdk.Coin
+	markEmptyRestakeAsFailed  bool
 
 	// Restake services
 	grantManager *grantManager
@@ -57,6 +58,7 @@ func NewRestakeClient(
 	botAddress string,
 	minimumRequiredReward math.LegacyDec,
 	minimumRequiredBotBalance *sdk.Coin,
+	markEmptyRestakeAsFailed bool,
 
 	broadcaster *tx.Broadcaster,
 
@@ -78,6 +80,7 @@ func NewRestakeClient(
 		validatorAddress:          validatorAddress,
 		minimumRequiredReward:     minimumRequiredReward,
 		minimumRequiredBotBalance: minimumRequiredBotBalance,
+		markEmptyRestakeAsFailed:  markEmptyRestakeAsFailed,
 
 		grantManager: grantManager,
 
@@ -107,7 +110,12 @@ func (rc *restakeClient) restake(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	if len(restakeDelegators) == 0 {
-		rc.logger.Warn().Str("chain_id", rc.chainID).Msg("no grants above minimum found, no restaking will be processed")
+		remarks := "no grants above minimum found, no restaking will be processed"
+		rc.logger.Warn().Str("chain_id", rc.chainID).Msg(remarks)
+
+		if rc.markEmptyRestakeAsFailed {
+			return nil, fmt.Errorf(remarks)
+		}
 	}
 	rc.logger.Info().Str("chain_id", rc.chainID).Msg("finished fetching delegators and grants")
 

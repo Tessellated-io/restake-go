@@ -398,6 +398,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		botAddress,
 		minimumRequiredReward,
 		minimumRequiredBotBalance,
+		localConfiguration.MarkEmptyRestakeAsFailed,
 		broadcaster,
 		grantManager,
 		prefixedLogger,

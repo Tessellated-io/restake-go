@@ -27,6 +27,7 @@ type Configuration struct {
 	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
 	ChainRegistryBaseUrl     string   `yaml:"chain_registry_base_url" comment:"The base url for the chain registry"`
 	ValidatorRegistryBaseUrl string   `yaml:"validator_registry_base_url" comment:"The base url for the validator registry"`
+	MarkEmptyRestakeAsFailed bool     `yaml:"mark_empty_as_failed" comment:"If true and there are no valid restake messages, the run will be marked as a failure. This is helpful in case the restake website will mark you as offline."`
 }
 
 func (c *Configuration) VersionedMemo(version string) string {
