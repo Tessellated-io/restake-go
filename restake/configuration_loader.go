@@ -23,7 +23,7 @@ type Configuration struct {
 	NetworkRetryDelaySeconds uint     `yaml:"network_retry_delay_seconds" comment:"How long to delay between retries due to RPC failures"`
 	NetworkRetryAttempts     uint     `yaml:"network_retry_attempts" comment:"How many attempts to retry due to network errors before failing."`
 
-	HealthChecksApiKey  string `yaml:"health_checks_api_key" comment:"An API key used to upsert new checks on healthchecks.io.`
+	HealthChecksApiKey  string `yaml:"health_checks_api_key" comment:"An API key used to upsert new checks on healthchecks.io."`
 	HealthChecksPingKey string `yaml:"health_checks_ping_key" comment:"A ping key for healthchecks.io. If empty, no pings will be delivered."`
 
 	RunIntervalSeconds       uint   `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
@@ -90,7 +90,7 @@ func (cl *configurationLoader) Initialize() error {
 
 	err := file.WriteYamlWithComments(config, header, configFile, cl.logger)
 	if err != nil {
-		cl.logger.Error("error writing file", "error", err.Error())
+		cl.logger.Error().Err(err).Msg("error writing file")
 		return err
 	}
 
