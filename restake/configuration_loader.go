@@ -22,12 +22,15 @@ type Configuration struct {
 	TxPollAttempts           uint     `yaml:"tx_poll_attempts" comment:"How many attempts to poll for a tx being included before failing."`
 	NetworkRetryDelaySeconds uint     `yaml:"network_retry_delay_seconds" comment:"How long to delay between retries due to RPC failures"`
 	NetworkRetryAttempts     uint     `yaml:"network_retry_attempts" comment:"How many attempts to retry due to network errors before failing."`
-	HealthChecksPingKey      string   `yaml:"health_checks_ping_key" comment:"A ping API key for healthchecks.io. If empty, no pings will be delivered."`
-	RunIntervalSeconds       uint     `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
-	BatchSize                uint     `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
-	ChainRegistryBaseUrl     string   `yaml:"chain_registry_base_url" comment:"The base url for the chain registry"`
-	ValidatorRegistryBaseUrl string   `yaml:"validator_registry_base_url" comment:"The base url for the validator registry"`
-	MarkEmptyRestakeAsFailed bool     `yaml:"mark_empty_as_failed" comment:"If true and there are no valid restake messages, the run will be marked as a failure. This is helpful in case the restake website will mark you as offline."`
+
+	HealthChecksApiKey  string `yaml:"health_checks_api_key" comment:"An API key used to upsert new checks on healthchecks.io.`
+	HealthChecksPingKey string `yaml:"health_checks_ping_key" comment:"A ping key for healthchecks.io. If empty, no pings will be delivered."`
+
+	RunIntervalSeconds       uint   `yaml:"run_interval_seconds" comment:"How many seconds to wait in between restake runs"`
+	BatchSize                uint   `yaml:"batch_size" comment:"What size batches of transactions should be sent in"`
+	ChainRegistryBaseUrl     string `yaml:"chain_registry_base_url" comment:"The base url for the chain registry"`
+	ValidatorRegistryBaseUrl string `yaml:"validator_registry_base_url" comment:"The base url for the validator registry"`
+	MarkEmptyRestakeAsFailed bool   `yaml:"mark_empty_as_failed" comment:"If true and there are no valid restake messages, the run will be marked as a failure. This is helpful in case the restake website will mark you as offline."`
 }
 
 func (c *Configuration) VersionedMemo(version string) string {
