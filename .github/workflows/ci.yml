@@ -22,7 +22,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.22'
       - name: Set up private repo access
         run: |
           git config --global url."https://${{ secrets.PERSONAL_ACCESS_TOKEN_FOR_GO_PACKAGES }}@github.com/".insteadOf "https://github.com/"
