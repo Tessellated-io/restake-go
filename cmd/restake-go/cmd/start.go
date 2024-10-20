@@ -31,14 +31,14 @@ var startCmd = &cobra.Command{
 		// Configuration loader
 		configurationLoader, err := restake.NewConfigurationLoader(configurationDirectory, logger)
 		if err != nil {
-			logger.Error("unable to create a configuration loader", "error", err.Error())
+			logger.Error().Err(err).Msg("unable to create a configuration loader")
 			return
 		}
 
 		// Create Gas Manager
 		gasPriceProvider, err := tx.NewFileGasPriceProvider(logger, configurationDirectory)
 		if err != nil {
-			logger.Error("unable to create a gas price provider", "error", err.Error())
+			logger.Error().Err(err).Msg("unable to create a gas price provider")
 			return
 		}
 		gasManager, err := tx.NewGeometricGasManager(
@@ -49,7 +49,7 @@ var startCmd = &cobra.Command{
 			logger,
 		)
 		if err != nil {
-			logger.Error("unable to create a gas manager", "error", err.Error())
+			logger.Error().Err(err).Msg("unable to create a gas manager")
 			return
 		}
 
@@ -57,14 +57,14 @@ var startCmd = &cobra.Command{
 		fileRouterConfig := fmt.Sprintf("%s/%s", configurationDirectory, fileRouterConfigFilename)
 		router, err := filerouter.NewRouter(fileRouterConfig)
 		if err != nil {
-			logger.Error("unable to create a chain router", "error", err.Error())
+			logger.Error().Err(err).Msg("unable to create a chain router")
 			return
 		}
 
 		// Bundle up a Restake Manager
 		restakeManager, err := restake.NewRestakeManager(RestakeVersion, configurationLoader, logger, router, gasManager, true)
 		if err != nil {
-			logger.Error("unable to create a restake manager", "error", err.Error())
+			logger.Error().Err(err).Msg("unable to create a restake manager")
 			return
 		}
 
