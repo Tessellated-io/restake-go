@@ -233,7 +233,14 @@ func (rm *RestakeManager) runRestakeForNetwork(
 
 		// Send health check if enabled
 		if !strings.EqualFold(localConfiguration.HealthChecksPingKey, "") {
-			healthClient := health.NewHealthClient(rm.logger, localConfiguration.HealthChecksPingKey, true)
+			healthClient := health.NewHealthClient(
+				rm.logger,
+				localConfiguration.HealthChecksApiKey,
+				localConfiguration.HealthChecksPingKey,
+				true,
+				int(localConfiguration.RunIntervalSeconds),   // Expect a ping every run interval
+				int(localConfiguration.RunIntervalSeconds)/2, // With a 50% grace period
+			)
 
 			if err == nil {
 				err = healthClient.SendSuccess(restakeChain.Name)
