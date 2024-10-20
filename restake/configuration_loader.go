@@ -87,7 +87,7 @@ func (cl *configurationLoader) Initialize() error {
 
 	err := file.WriteYamlWithComments(config, header, configFile, cl.logger)
 	if err != nil {
-		cl.logger.Error().Err(err).Msg("error writing file")
+		cl.logger.Error("error writing file", "error", err.Error())
 		return err
 	}
 

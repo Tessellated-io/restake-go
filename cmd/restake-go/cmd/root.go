@@ -29,8 +29,7 @@ var rootCmd = &cobra.Command{
 See also: https://github.com/eco-stake/restake.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Get a logger
-		logLevel := log.ParseLogLevel(rawLogLevel)
-		logger = log.NewLogger(logLevel)
+		logger = log.NewLogger(rawLogLevel)
 
 		configurationDirectory = config.ExpandHomeDir(configurationDirectory)
 	},
