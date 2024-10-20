@@ -230,6 +230,8 @@ github.com/dlclark/regexp2 v1.7.0 h1:7lJfhqlPssTb1WQx4yvTHN0uElPEv52sbaECrAQxjAo
 github.com/dlclark/regexp2 v1.7.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7 h1:kgvzE5wLsLa7XKfV85VZl40QXaMCaeFtHpPwJ8fhotY=
 github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7/go.mod h1:yRkwfj0CBpOGre+TwBsqPV0IH0Pk73e4PXJOeNDboGs=
+github.com/dpotapov/slogpfx v0.0.0-20230917063348-41a73c95c536 h1:3ZUyGIhpbUJVL3nwGRJO/DH1GRNb3qhKOteP1tMwFrA=
+github.com/dpotapov/slogpfx v0.0.0-20230917063348-41a73c95c536/go.mod h1:L9xGyDDA8E/83ucQSIKU/ZU3YfS3BzhyynT0ykxJGCk=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
@@ -639,8 +641,8 @@ github.com/tendermint/go-amino v0.16.0 h1:GyhmgQKvqF82e2oZeuMSp9JTN0N09emoSZlb2l
 github.com/tendermint/go-amino v0.16.0/go.mod h1:TQU0M1i/ImAo+tYpZi73AU3V/dKeCoMC9Sphe2ZwGME=
 github.com/tessellated-io/healthchecks v0.0.3 h1:k4y2/31ZhaZ6f7AQMCQQQOpIReJDNt8J/B0VxKchyMg=
 github.com/tessellated-io/healthchecks v0.0.3/go.mod h1:SNLJVFCD2Z9IFRYNiF7f4hoJ4+RsjHgrK7YvKCixfdI=
-github.com/tessellated-io/pickaxe v1.1.7 h1:iMiLWMA5Rl57JuSZNuBnqsrNwMZOvygOQ/qVj4bailE=
-github.com/tessellated-io/pickaxe v1.1.7/go.mod h1:G6FMTiWB8rLG4YH0THu2t2tZIMUC2Rykl22JotEIgLM=
+github.com/tessellated-io/pickaxe v1.2.0 h1:0Jm06yY+hgVAfjxhxdCPK6/u4+vWkJhApD5r6q756M8=
+github.com/tessellated-io/pickaxe v1.2.0/go.mod h1:eh7qys33qMgVNfcuPyb3AlvRKiHRFu0Z456jeKVQV6E=
 github.com/tessellated-io/router v0.0.5 h1:t6XXH4neABYljW4Nrf1u+orYXf1VUg249BwWMdbD3Bc=
 github.com/tessellated-io/router v0.0.5/go.mod h1:Oj5Zw+/B5IwoL1ocuTsySz/1ZWEIxln50oHt0YbSjlQ=
 github.com/tidwall/btree v1.6.0 h1:LDZfKfQIBHGHWSwckhXI0RPSXzlo+KYdjK7FWSqOzzg=

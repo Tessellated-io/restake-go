@@ -93,57 +93,61 @@ func NewRestakeClient(
 }
 
 func (rc *restakeClient) restake(ctx context.Context) ([]string, error) {
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("performing pre-flight sanity checks")
+	logger := rc.logger.With("chain_id", rc.chainID)
+
+	logger.Info("performing pre-flight sanity checks")
 	// 1. Perform sanity checks
 	err := rc.performSanityChecks(ctx)
 	if err != nil {
-		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed sanity checks")
+		logger.Error("failed sanity checks", "error", err.Error())
 		return nil, err
 	}
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("starting to restake")
+	logger.Info("starting to restake")
 
 	// 2. Get all valid grants
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("fetching delegators and grants. this might take a while if there are many delegators...")
+	logger.Info("fetching delegators and grants. this might take a while if there are many delegators...")
 	restakeDelegators, err := rc.grantManager.getRestakeDelegators(ctx, rc.minimumRequiredReward)
 	if err != nil {
-		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to fetch grants")
+		logger.Error("failed to fetch grants", "error", err.Error())
 		return nil, err
 	}
 	if len(restakeDelegators) == 0 {
 		remarks := "no grants above minimum found, no restaking will be processed"
-		rc.logger.Warn().Str("chain_id", rc.chainID).Msg(remarks)
+		logger.Warn(remarks)
 
 		if rc.markEmptyRestakeAsFailed {
 			return nil, fmt.Errorf(remarks)
 		}
 	}
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("finished fetching delegators and grants")
+	logger.Info("finished fetching delegators and grants")
 
 	// 3. Create restake messages
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("creating restake messages")
+	logger.Info("creating restake messages")
 	batches, err := rc.createRestakeMessages(ctx, restakeDelegators)
 	if err != nil {
-		rc.logger.Error().Err(err).Str("chain_id", rc.chainID).Msg("failed to generate restake messages")
+		logger.Error("failed to generate restake messages", "error", err)
 		return nil, err
 	}
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("finished creating messages")
+	logger.Info("finished creating messages")
 
 	// 4. Send in batches
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("sending restake batches")
+	logger.Info("sending restake batches")
 	txHashes := []string{}
 	for batchNum, batch := range batches {
-		rc.logger.Info().Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📬 sending a batch of messages")
+		logger.Info("📬 sending a batch of messages", "batch_size", rc.batchSize, "batch", batchNum+1, "total_batches", len(batches))
 
 		txHash, err := rc.broadcaster.SignAndBroadcast(ctx, []sdk.Msg{batch})
-		rc.logger.Debug().Str("tx_hash", txHash).Err(err).Msg("restake_client::got result from signAndBroadcast")
+		logger = logger.With("tx_hash", txHash)
+
+		logger.Debug("restake_client::got result from signAndBroadcast", "error", err.Error())
 		if err != nil {
 			return nil, err
 		}
 		txHashes = append(txHashes, txHash)
-		rc.logger.Info().Str("tx_hash", txHash).Uint("batch_size", rc.batchSize).Int("batch", batchNum+1).Int("total_batches", len(batches)).Msg("📭 batch sent successfully")
+		logger.Info("📭 batch sent successfully", "batch_size", rc.batchSize, "batch", batchNum+1, "total_batches", len(batches))
 	}
 
-	rc.logger.Info().Str("chain_id", rc.chainID).Msg("🙌 successfully restaked")
+	logger.Info("🙌 successfully restaked")
 	return txHashes, nil
 }
 
