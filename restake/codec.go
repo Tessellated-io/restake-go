@@ -10,6 +10,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/codec"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -30,6 +31,7 @@ func getCodec() *codec.ProtoCodec {
 		stakingtypes.RegisterInterfaces(interfaceRegistry)
 		cryptocodec.RegisterInterfaces(interfaceRegistry)
 		types.RegisterInterfaces(interfaceRegistry)
+		vestingtypes.RegisterInterfaces(interfaceRegistry)
 
 		cdc = codec.NewProtoCodec(interfaceRegistry)
 	})
