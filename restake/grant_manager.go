@@ -42,7 +42,8 @@ func NewGrantManager(botAddress, chainID string, logger *log.Logger, rpcClient r
 }
 
 func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward math.LegacyDec) ([]*restakeDelegator, error) {
-	gm.logger.Debug().Str("chain_id", gm.chainID).Str("bot_address", gm.botAddress).Msg("fetching grants")
+	logger := gm.logger.With("chain_id", gm.chainID, "bot_address", gm.botAddress, "staking_token", gm.stakingDenom)
+	logger.Debug("fetching grants")
 
 	// Get all grants to the bot
 	allGrants, err := gm.rpcClient.GetGrants(ctx, gm.botAddress)
@@ -52,7 +53,7 @@ func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward 
 
 	// Filter for grants that can be restaked
 	grants := arrays.Filter(allGrants, isValidGrant)
-	gm.logger.Debug().Int("grants", len(grants)).Msg("Found valid grants")
+	logger.Debug("Found valid grants", "grants", len(grants))
 	if len(grants) == 0 {
 		// NOTE: We log a warning for this in `restakeManager`, so we silently return here.
 		return []*restakeDelegator{}, nil
@@ -69,11 +70,12 @@ func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward 
 		if err != nil {
 			return nil, err
 		}
-		gm.logger.Debug().Str("delegator", delegatorAddress).Str("total_rewards", totalRewards.String()).Str("staking_token", gm.stakingDenom).Msg("fetched delegation rewards")
+		logger = logger.With("delegator", delegatorAddress, "total_rewards", totalRewards.String())
+		logger.Debug("fetched delegation rewards")
 
 		// Determine if they are above the minimum
 		if totalRewards.LT(minimumReward) {
-			gm.logger.Debug().Str("delegator", delegatorAddress).Str("total_rewards", totalRewards.String()).Str("staking_token", gm.stakingDenom).Str("minimum_rewards", minimumReward.String()).Msg("skipping because below award threshold")
+			logger.Debug("skipping because below award threshold", "minimum_rewards", minimumReward.String())
 			continue
 		}
 
@@ -85,7 +87,7 @@ func (gm *grantManager) getRestakeDelegators(ctx context.Context, minimumReward 
 		restakeDelegators = append(restakeDelegators, restakeDelegator)
 	}
 
-	gm.logger.Debug().Int("eligible_delegators", len(restakeDelegators)).Str("minimum", minimumReward.String()).Str("denom", gm.stakingDenom).Msg("fetched valid grants above minimum")
+	logger.Debug("fetched valid grants above minimum", "eligible_delegators", len(restakeDelegators), "minimum", minimumReward.String())
 	return restakeDelegators, nil
 }
 

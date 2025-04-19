@@ -1,6 +1,8 @@
 module github.com/tessellated-io/restake-go
 
-go 1.21
+go 1.21.0
+
+toolchain go1.22.6
 
 require (
 	cosmossdk.io/math v1.1.2
@@ -9,7 +11,7 @@ require (
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/tessellated-io/healthchecks v0.0.3
-	github.com/tessellated-io/pickaxe v1.1.7
+	github.com/tessellated-io/pickaxe v1.2.0
 	github.com/tessellated-io/router v0.0.5
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -52,6 +54,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
+	github.com/dpotapov/slogpfx v0.0.0-20230917063348-41a73c95c536 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/ethereum/go-ethereum v1.11.5 // indirect

@@ -80,7 +80,7 @@ func NewRestakeManager(
 }
 
 func (rm *RestakeManager) Start(ctx context.Context) {
-	rm.logger.Debug().Msg("starting restake")
+	rm.logger.Debug("starting restake")
 
 	// Run immediately, initially.
 	nextRunTime := time.Now()
@@ -88,7 +88,7 @@ func (rm *RestakeManager) Start(ctx context.Context) {
 	for {
 		// Sleep until the next run time.
 		timeToNextRun := time.Until(nextRunTime)
-		rm.logger.Info().Time("next_run_time", nextRunTime).Str("time_to_next_run", timeToNextRun.String()).Msg("waiting for next run")
+		rm.logger.Info("waiting for next run", "next_run_time", nextRunTime, "time_to_next_run", timeToNextRun.String())
 		time.Sleep(timeToNextRun)
 
 		// Reload the config
@@ -112,12 +112,12 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 	defer func() {
 		// Log errors, if one has been populated
 		if err != nil {
-			rm.logger.Error().Err(err).Msg("encountered error in restaking run.")
+			rm.logger.Error("encountered error in restaking run", "error", err.Error())
 		} else {
-			rm.logger.Info().Msg("finished a monitoring run.")
+			rm.logger.Info("finished a monitoring run", "error", err.Error())
 		}
 	}()
-	rm.logger.Debug().Msg("starting core restake loop")
+	rm.logger.Debug("starting core restake loop")
 
 	// Retryable chain registry client
 	rawChainClient := chainregistry.NewChainRegistryClient(rm.logger, localConfiguration.ChainRegistryBaseUrl, localConfiguration.ValidatorRegistryBaseUrl)
@@ -128,18 +128,18 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 		rm.logger,
 	)
 	if err != nil {
-		rm.logger.Error().Err(err).Msg("unable to create a chain registry client")
+		rm.logger.Error("unable to create a chain registry client", "error", err.Error())
 		return
 	}
-	rm.logger.Debug().Msg("created chain registry client")
+	rm.logger.Debug("created chain registry client")
 
 	// Load Restake Configuration from registry
 	registryConfiguration, err := chainRegistryClient.Validator(ctx, localConfiguration.TargetValidator)
 	if err != nil {
-		rm.logger.Error().Err(err).Msg("failed to load configuration from Restake's validator registry")
+		rm.logger.Error("failed to load configuration from Restake's validator registry", "error", err.Error())
 		return
 	}
-	rm.logger.Debug().Int("registry_count", len(registryConfiguration.Chains)).Msg("loaded restake registry data")
+	rm.logger.Debug("loaded restake registry data", "registry_count", len(registryConfiguration.Chains))
 
 	// Filter networks marked to ignore
 	ignoreChainNames := localConfiguration.Ignores
@@ -148,7 +148,7 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 		shouldIgnore := false
 		for _, ignore := range ignoreChainNames {
 			if strings.EqualFold(chain.Name, ignore) {
-				rm.logger.Info().Str("chain_id", chain.Name).Msg("ignoring chain due to configuration file")
+				rm.logger.Info("ignoring chain due to configuration file", "chain_id", chain.Name)
 				shouldIgnore = true
 			}
 		}
@@ -157,7 +157,7 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 			restakeChains = append(restakeChains, chain)
 		}
 	}
-	rm.logger.Debug().Int("chain_count", len(restakeChains)).Msg("determined chains to restake")
+	rm.logger.Debug("determined chains to restake", "chain_count", len(restakeChains))
 
 	// Run for each network
 	results = []*RestakeResult{}
@@ -167,14 +167,14 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 		// Print results whenever they all finish
 		// Do this async so that the time.sleep() below tracks time correctly
 		if rm.debug_runSync {
-			rm.logger.Debug().Msg("running restake synchronously for debugging")
+			rm.logger.Debug("running restake synchronously for debugging")
 			rm.runRestakeForNetwork(
 				ctx,
 				localConfiguration,
 				restakeChain,
 				chainRegistryClient,
 			)
-			rm.logger.Debug().Msg("synchronously running runRestakeForNetwork has finished")
+			rm.logger.Debug("synchronously running runRestakeForNetwork has finished")
 
 		} else {
 			go rm.runRestakeForNetwork(
@@ -188,9 +188,9 @@ func (rm *RestakeManager) runOnce(ctx context.Context, localConfiguration *Confi
 	}
 
 	// Wait until all jobs time out, or finish
-	rm.logger.Debug().Msg("all jobs kicked off")
+	rm.logger.Debug("all jobs kicked off")
 	wg.Wait()
-	rm.logger.Debug().Msg("all jobs finished")
+	rm.logger.Debug("all jobs finished")
 
 	rm.waitForAndPrintResults()
 }
@@ -212,6 +212,8 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var txHashes []string
 	var err error
 
+	logger := rm.logger.With("chain_name", restakeChain.Name)
+
 	defer func() {
 		// Ensure we didn't crash from panic
 		recoveredErr := recover()
@@ -220,7 +222,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		}
 
 		if err != nil {
-			rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("restake failed with error")
+			logger.Error("restake failed with error", "error", err.Error())
 		}
 
 		// Add results
@@ -242,21 +244,21 @@ func (rm *RestakeManager) runRestakeForNetwork(
 			}
 
 			if err != nil {
-				rm.logger.Error().Err(err).Str("chain_id", restakeChain.Name).Msg("unable to send healthchecks ping")
+				rm.logger.Error("unable to send healthchecks ping")
 			}
 
 		} else {
-			rm.logger.Info().Str("chain_id", restakeChain.Name).Msg("not sending healthchecks.io pings as they are disabled in config.")
+			rm.logger.Info("not sending healthchecks.io pings as they are disabled in config")
 		}
 
 		// Leave wait group
 		defer wg.Done()
 	}()
-	prefixedLogger := rm.logger.ApplyPrefix(fmt.Sprintf("[%s]", restakeChain.Name))
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("starting restake for network")
+	prefixedLogger := logger.ApplyPrefix(fmt.Sprintf("[%s]", restakeChain.Name))
+	prefixedLogger.Info("starting restake for network")
 
 	// Get the chain info
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("fetching chain registry data for chain...")
+	prefixedLogger.Info("fetching chain registry data for chain...")
 	var chainInfo *chainregistry.ChainInfo
 	chainInfo, err = chainRegistryClient.ChainInfo(ctx, restakeChain.Name)
 	if err != nil {
@@ -269,14 +271,14 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	var stakingDenom string
 	stakingDenom, err = chainInfo.StakingDenom()
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Msg("failed to get staking denom")
+		prefixedLogger.Error("failed to get staking denom", "error", err.Error())
 		return
 	}
 
 	var minimumRequiredReward math.LegacyDec
 	minimumRequiredReward, err = math.LegacyNewDecFromStr(restakeChain.Restake.MinimumReward.String())
 	if err != nil {
-		prefixedLogger.Error().Err(err).Str("chain_name", restakeChain.Name).Str("minimum_reward", restakeChain.Restake.MinimumReward.String()).Msg("failed to parse minimum reward")
+		prefixedLogger.Error("failed to parse minimum reward", "error", err.Error(), "minimum_reward", restakeChain.Restake.MinimumReward.String())
 		return
 	}
 
@@ -304,7 +306,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 		return
 	}
 
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished fetching chain registry data")
+	prefixedLogger.Info("finished fetching chain registry data")
 
 	// Get an endpoint from the Router
 	var grpcEndpoint string
@@ -410,7 +412,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 	}
 
 	txHashes, err = restakeClient.restake(ctx)
-	prefixedLogger.Info().Str("chain_name", restakeChain.Name).Msg("finished restaking")
+	prefixedLogger.Info("finished restaking")
 
 	stringifiedTxHashes := ""
 	if txHashes != nil {
@@ -418,7 +420,7 @@ func (rm *RestakeManager) runRestakeForNetwork(
 			return fmt.Sprintf("%s%s, ", accumulated, next)
 		}, "")
 	}
-	prefixedLogger.Debug().Str("chain_name", restakeChain.Name).Str("tx_hashes", stringifiedTxHashes).Err(err).Msg("verbose restake results")
+	prefixedLogger.Debug("verbose restake results", "tx_hashes", stringifiedTxHashes, "error", err.Error())
 }
 
 // Results of running Restake on a given network
@@ -437,7 +439,7 @@ func (rr RestakeResults) Less(i, j int) bool { return rr[i].network < rr[j].netw
 func printResults(results RestakeResults, log *log.Logger) {
 	sort.Sort(results)
 
-	log.Info().Msg("Restake Results:")
+	log.Info("Restake Results:")
 	for _, result := range results {
 		if result.err == nil {
 			txHashes := zerolog.Arr()
@@ -450,9 +452,9 @@ func printResults(results RestakeResults, log *log.Logger) {
 				msg = fmt.Sprintf("%s | 😬 No transactions sent. The restake website may mark you as offline.", msg)
 			}
 
-			log.Info().Array("tx_hashes", txHashes).Msg(msg)
+			log.Info(msg, "tx_hashes", txHashes)
 		} else {
-			log.Error().Err(result.err).Msg(fmt.Sprintf("❌ %s: Failure", result.network))
+			log.Error(fmt.Sprintf("❌ %s: Failure", result.network), "error", result.err.Error())
 		}
 	}
 }
@@ -464,7 +466,7 @@ func (rm *RestakeManager) mustLoadConfig() *Configuration {
 			return config
 		}
 
-		rm.logger.Error().Err(err).Msg("error reloading config. trying again...")
+		rm.logger.Error("error reloading config. trying again...", "error", err.Error())
 		time.Sleep(30 * time.Second)
 	}
 }
