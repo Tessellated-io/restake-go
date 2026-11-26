@@ -18,12 +18,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: tessellated-io/github-actions
-          ref: v1
+          ref: keefer/self-reference
           token: ${{ secrets.GH_ACCESS_TOKEN }}
           path: .private-actions
           persist-credentials: false
 
-      - name: build bot
+      - name: build restake
         uses: ./.private-actions/go/build-module
         with:
           module-file: go.mod
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: test bot
+      - name: test restake
         uses: tessellated-io/github-actions/go/test-module@v1
         with:
           module-file: go.mod
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: lint bot
+      - name: lint restake
         uses: tessellated-io/github-actions/go/lint@v1
         with:
           module-file: go.mod
