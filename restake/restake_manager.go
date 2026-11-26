@@ -88,7 +88,12 @@ func (rm *RestakeManager) Start(ctx context.Context) {
 		// Sleep until the next run time.
 		timeToNextRun := time.Until(nextRunTime)
 		rm.logger.Info().Time("next_run_time", nextRunTime).Str("time_to_next_run", timeToNextRun.String()).Msg("waiting for next run")
-		time.Sleep(timeToNextRun)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(timeToNextRun):
+			// Intentional fall through
+		}
 
 		// Reload the config
 		localConfiguration := rm.mustLoadConfig()
