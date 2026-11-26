@@ -2,6 +2,7 @@ package restake
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
