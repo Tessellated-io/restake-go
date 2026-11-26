@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  build-server:
+  build-restake:
     name: "build"
     runs-on: self-hosted
     steps:
@@ -20,7 +20,7 @@ jobs:
           module-file: go.mod
           github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
 
-  test-server:
+  test-restake:
     name: "test"
     runs-on: self-hosted
     steps:
@@ -32,7 +32,7 @@ jobs:
           module-file: go.mod
           github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
 
-  lint-server:
+  lint-restake:
     name: "lint"
     runs-on: self-hosted
     steps:
