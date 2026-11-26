@@ -8,7 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/codec"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	txauth "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/rs/zerolog"
+
 	"github.com/tessellated-io/healthchecks/health"
 	"github.com/tessellated-io/pickaxe/arrays"
 	chainregistry "github.com/tessellated-io/pickaxe/cosmos/chain-registry"
@@ -18,12 +23,6 @@ import (
 	"github.com/tessellated-io/pickaxe/log"
 	"github.com/tessellated-io/pickaxe/util"
 	routertypes "github.com/tessellated-io/router/types"
-
-	"cosmossdk.io/math"
-
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	txauth "github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
 var (

@@ -5,18 +5,17 @@ import (
 	"fmt"
 	"strings"
 
+	"cosmossdk.io/math"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/cosmos/tx"
 	"github.com/tessellated-io/pickaxe/crypto"
 	"github.com/tessellated-io/pickaxe/log"
-
-	"cosmossdk.io/math"
-
-	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 // A restake client performs a one time restake
@@ -114,7 +113,7 @@ func (rc *restakeClient) restake(ctx context.Context) ([]string, error) {
 		rc.logger.Warn().Str("chain_id", rc.chainID).Msg(remarks)
 
 		if rc.markEmptyRestakeAsFailed {
-			return nil, fmt.Errorf(remarks)
+			return nil, errors.New(remarks)
 		}
 	}
 	rc.logger.Info().Str("chain_id", rc.chainID).Msg("finished fetching delegators and grants")

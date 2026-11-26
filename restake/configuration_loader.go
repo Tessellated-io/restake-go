@@ -5,9 +5,10 @@ import (
 	"os"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
 	file "github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/pickaxe/log"
-	"gopkg.in/yaml.v2"
 )
 
 const RestakeConfigFilename = "restake.yml"
