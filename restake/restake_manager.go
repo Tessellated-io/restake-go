@@ -60,12 +60,12 @@ func NewRestakeManager(
 
 	debug_runSync bool,
 ) (*RestakeManager, error) {
-	cdc := getCodec()
+	codec := getCodec()
 
 	restakeManager := &RestakeManager{
 		version: version,
 
-		cdc:         cdc,
+		cdc:         codec,
 		chainRouter: chainRouter,
 		gasManager:  gasManager,
 		logger:      logger,
