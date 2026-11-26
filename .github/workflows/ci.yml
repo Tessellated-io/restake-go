@@ -14,11 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
       - name: Checkout private actions
         uses: actions/checkout@v7
         with:
           repository: tessellated-io/github-actions
-          ref: keefer/self-refernce
+          ref: v1
           token: ${{ secrets.GH_ACCESS_TOKEN }}
           path: .private-actions
           persist-credentials: false
@@ -44,6 +46,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
+      - name: Checkout private actions
+        uses: actions/checkout@v7
+        with:
+          repository: tessellated-io/github-actions
+          ref: v1
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          path: .private-actions
+          persist-credentials: false
+
+      - name: Rewrite private action references
+        shell: bash
+        run: |
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
+
       - name: test restake
         uses: tessellated-io/github-actions/go/test-module@v1
         with:
@@ -55,6 +78,27 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v7
+
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
+      - name: Checkout private actions
+        uses: actions/checkout@v7
+        with:
+          repository: tessellated-io/github-actions
+          ref: v1
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          path: .private-actions
+          persist-credentials: false
+
+      - name: Rewrite private action references
+        shell: bash
+        run: |
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
 
       - name: lint restake
         uses: tessellated-io/github-actions/go/lint@v1
