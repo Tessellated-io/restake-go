@@ -19,7 +19,7 @@ jobs:
         with:
           repository: tessellated-io/github-actions
           ref: v1
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
           path: .private-actions
           persist-credentials: false
 
