@@ -23,6 +23,15 @@ jobs:
           path: .private-actions
           persist-credentials: false
 
+      - name: Rewrite private action references
+        shell: bash
+        run: |
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
       - name: build restake
         uses: ./.private-actions/go/build-module
         with:
