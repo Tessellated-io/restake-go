@@ -66,9 +66,8 @@ jobs:
               's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
               {} +
 
-
       - name: test restake
-        uses: tessellated-io/github-actions/go/test-module@v1
+        uses: ./.private-actions/go/test-module
         with:
           module-file: go.mod
           github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
@@ -99,9 +98,8 @@ jobs:
               's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
               {} +
 
-
       - name: lint restake
-        uses: tessellated-io/github-actions/go/lint@v1
+        uses: ./.private-actions/go/lint
         with:
           module-file: go.mod
           github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
