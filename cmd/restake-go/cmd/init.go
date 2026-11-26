@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
 	file "github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/restake-go/restake"
 	filerouter "github.com/tessellated-io/router/file"

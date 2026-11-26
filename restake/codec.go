@@ -3,15 +3,14 @@ package restake
 import (
 	"sync"
 
-	cryptocodec "github.com/evmos/evmos/v14/crypto/codec"
-	"github.com/evmos/evmos/v14/types"
-
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/codec"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	cryptocodec "github.com/evmos/evmos/v14/crypto/codec"
+	"github.com/evmos/evmos/v14/types"
 )
 
 // Provides a singleton codec that can be used across the application

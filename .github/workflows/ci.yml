@@ -1,6 +1,4 @@
-# Tessellated Standard Build:
-# - run build, test, lint
-name: Continuous Integration
+name: restake-go
 
 on:
   push:
@@ -8,24 +6,100 @@ on:
     tags:
       - "v*"
   pull_request:
-    branches: [ main ]
 
 jobs:
- check-weather-watch:
-    strategy:
-      matrix:
-        make_action: ["build", "lint"]
-    runs-on: ubuntu-latest  
-    name: "${{matrix.make_action}} restake-go"
+  build-restake:
+    name: "build"
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup Go
-        uses: actions/setup-go@v3
+      - uses: actions/checkout@v7
+
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
+      - name: Checkout private actions
+        uses: actions/checkout@v7
         with:
-          go-version: '1.20'
-      - name: Set up private repo access
+          repository: tessellated-io/github-actions
+          ref: v1
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          path: .private-actions
+          persist-credentials: false
+
+      - name: Rewrite private action references
+        shell: bash
         run: |
-          git config --global url."https://${{ secrets.PERSONAL_ACCESS_TOKEN_FOR_GO_PACKAGES }}@github.com/".insteadOf "https://github.com/"
-      - name: "${{matrix.make_action}} Code"
-        run: make ${{matrix.make_action}}
- 
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
+      - name: build restake
+        uses: ./.private-actions/go/build-module
+        with:
+          module-file: go.mod
+          github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
+
+  test-restake:
+    name: "test"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
+      - name: Checkout private actions
+        uses: actions/checkout@v7
+        with:
+          repository: tessellated-io/github-actions
+          ref: v1
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          path: .private-actions
+          persist-credentials: false
+
+      - name: Rewrite private action references
+        shell: bash
+        run: |
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
+      - name: test restake
+        uses: ./.private-actions/go/test-module
+        with:
+          module-file: go.mod
+          github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}
+
+  lint-restake:
+    name: "lint"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+
+      # Use private tessellated-io/github-actions@v1. Public repos can't access private actions, so clone the actions repo locally and
+      # rewrite references to point the actions correctly
+      - name: Checkout private actions
+        uses: actions/checkout@v7
+        with:
+          repository: tessellated-io/github-actions
+          ref: v1
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          path: .private-actions
+          persist-credentials: false
+
+      - name: Rewrite private action references
+        shell: bash
+        run: |
+          find .private-actions -type f \
+            \( -name action.yml -o -name action.yaml \) \
+            -exec sed -i -E \
+              's#(uses:[[:space:]]*)\$/#\1./.private-actions/#g' \
+              {} +
+
+      - name: lint restake
+        uses: ./.private-actions/go/lint
+        with:
+          module-file: go.mod
+          github-access-token: ${{ secrets.GH_ACCESS_TOKEN }}

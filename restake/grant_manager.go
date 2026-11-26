@@ -4,14 +4,13 @@ import (
 	"context"
 	"time"
 
+	"cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
+
 	"github.com/tessellated-io/pickaxe/arrays"
 	"github.com/tessellated-io/pickaxe/cosmos/rpc"
 	"github.com/tessellated-io/pickaxe/log"
-
-	"cosmossdk.io/math"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
 )
 
 // restakeDelegator defines data about a restake delegator using Restake
