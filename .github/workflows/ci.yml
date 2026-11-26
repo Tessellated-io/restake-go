@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: tessellated-io/github-actions
-          ref: keefer/self-reference
+          ref: keefer/self-refernce
           token: ${{ secrets.GH_ACCESS_TOKEN }}
           path: .private-actions
           persist-credentials: false
