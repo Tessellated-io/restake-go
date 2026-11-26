@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/tessellated-io/fractal/core/safeconv"
 	file "github.com/tessellated-io/pickaxe/config"
 	"github.com/tessellated-io/pickaxe/log"
 )
@@ -36,15 +37,27 @@ func (c *Configuration) VersionedMemo(version string) string {
 }
 
 func (c *Configuration) RunInterval() time.Duration {
-	return time.Duration(c.RunIntervalSeconds) * time.Second
+	converted, err := safeconv.UintToInt64(c.RunIntervalSeconds)
+	if err != nil {
+		panic(fmt.Errorf("%w: run interval", err))
+	}
+	return time.Duration(converted) * time.Second
 }
 
 func (c *Configuration) NetworkRetryDelay() time.Duration {
-	return time.Duration(c.NetworkRetryDelaySeconds) * time.Second
+	converted, err := safeconv.UintToInt64(c.NetworkRetryDelaySeconds)
+	if err != nil {
+		panic(fmt.Errorf("%w: network retry delay", err))
+	}
+	return time.Duration(converted) * time.Second
 }
 
 func (c *Configuration) TxPollDelay() time.Duration {
-	return time.Duration(c.TxPollDelaySeconds) * time.Second
+	converted, err := safeconv.UintToInt64(c.TxPollDelaySeconds)
+	if err != nil {
+		panic(fmt.Errorf("%w: tx poll delay", err))
+	}
+	return time.Duration(converted) * time.Second
 }
 
 // configurationLoader loads configuration
